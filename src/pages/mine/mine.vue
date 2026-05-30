@@ -47,12 +47,14 @@
         退出登录
       </button>
     </view>
+    <CustomTabbar />
   </view>
 </template>
 
 <script setup lang="ts">
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
+import CustomTabbar from '@/components/custom-tabbar/custom-tabbar.vue'
 
 const userStore = useUserStore()
 
@@ -88,7 +90,7 @@ onShow(() => {
 .page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding: 20rpx 30rpx;
+  padding: 20rpx 30rpx 180rpx;
 }
 
 .profile {

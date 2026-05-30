@@ -46,6 +46,7 @@
         </view>
       </view>
     </view>
+    <CustomTabbar />
   </view>
 </template>
 
@@ -53,6 +54,7 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useBillStore } from '@/store/bill'
+import CustomTabbar from '@/components/custom-tabbar/custom-tabbar.vue'
 
 const billStore = useBillStore()
 const selectedYear = ref(new Date().getFullYear())
@@ -95,7 +97,7 @@ onShow(() => {
 .page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding: 20rpx 30rpx;
+  padding: 20rpx 30rpx 180rpx;
 }
 
 .year-bar {

@@ -2,5 +2,8 @@
   "name": "addBill",
   "version": "1.0.0",
   "main": "index.js",
-  "description": "Add a new bill"
+  "description": "Add a new bill",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
 }

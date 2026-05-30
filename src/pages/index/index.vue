@@ -49,6 +49,7 @@
         <text>没有更多了</text>
       </view>
     </view>
+    <CustomTabbar />
   </view>
 </template>
 
@@ -56,6 +57,7 @@
 import { computed } from 'vue'
 import { onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app'
 import { useBillStore } from '@/store/bill'
+import CustomTabbar from '@/components/custom-tabbar/custom-tabbar.vue'
 
 const billStore = useBillStore()
 
@@ -114,6 +116,7 @@ onReachBottom(() => {
 .page {
   min-height: 100vh;
   background-color: #f5f5f5;
+  padding-bottom: 180rpx;
 }
 
 .summary {

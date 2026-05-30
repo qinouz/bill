@@ -2,5 +2,8 @@
   "name": "login",
   "version": "1.0.0",
   "main": "index.js",
-  "description": "Get user openid"
+  "description": "Get user openid",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
 }

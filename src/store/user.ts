@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { login as loginApi, getUserStats } from '@/api/user'
+import { initCategories } from '@/api/category'
 
 export interface User {
   openid: string
@@ -19,6 +20,8 @@ export const useUserStore = defineStore('user', () => {
       const data = await loginApi()
       userInfo.value = data
       uni.setStorageSync('userInfo', data)
+      // 初始化默认分类
+      initCategories({ userId: data.userId }).catch(() => {})
     } catch {
       const cached = uni.getStorageSync('userInfo')
       if (cached) userInfo.value = cached

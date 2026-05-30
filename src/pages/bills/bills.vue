@@ -13,10 +13,16 @@
       </view>
     </view>
 
-    <!-- 金额显示 -->
+    <!-- 金额输入 -->
     <view class="amount-area">
       <text class="currency">¥</text>
-      <text class="amount-display">{{ inputAmount }}</text>
+      <input
+        v-model="inputAmount"
+        class="amount-input"
+        type="digit"
+        placeholder="0.00"
+        placeholder-class="amount-placeholder"
+      />
     </view>
 
     <!-- 日期选择 -->
@@ -54,32 +60,13 @@
       />
     </view>
 
-    <!-- 数字键盘 -->
-    <view class="keyboard">
-      <view class="key-row">
-        <view class="key" @tap="onKey('1')"><text>1</text></view>
-        <view class="key" @tap="onKey('2')"><text>2</text></view>
-        <view class="key" @tap="onKey('3')"><text>3</text></view>
-      </view>
-      <view class="key-row">
-        <view class="key" @tap="onKey('4')"><text>4</text></view>
-        <view class="key" @tap="onKey('5')"><text>5</text></view>
-        <view class="key" @tap="onKey('6')"><text>6</text></view>
-      </view>
-      <view class="key-row">
-        <view class="key" @tap="onKey('7')"><text>7</text></view>
-        <view class="key" @tap="onKey('8')"><text>8</text></view>
-        <view class="key" @tap="onKey('9')"><text>9</text></view>
-      </view>
-      <view class="key-row">
-        <view class="key" @tap="onKey('.')"><text>.</text></view>
-        <view class="key" @tap="onKey('0')"><text>0</text></view>
-        <view class="key key-del" @tap="onKey('del')"><text>删除</text></view>
-      </view>
-      <view class="key-row">
-        <view class="key key-confirm" @tap="handleSubmit"><text>确认记账</text></view>
+    <!-- 确认按钮 -->
+    <view class="submit-area">
+      <view class="btn-confirm" @tap="handleSubmit">
+        <text>确认记账</text>
       </view>
     </view>
+    <CustomTabbar />
   </view>
 </template>
 
@@ -88,6 +75,7 @@ import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useBillStore } from '@/store/bill'
 import { getToday } from '@/utils/date'
+import CustomTabbar from '@/components/custom-tabbar/custom-tabbar.vue'
 
 const billStore = useBillStore()
 
@@ -96,7 +84,7 @@ const types = [
   { value: 'income' as const, label: '收入' },
 ]
 const currentType = ref<'income' | 'expense'>('expense')
-const inputAmount = ref('0')
+const inputAmount = ref('')
 const selectedCategory = ref('')
 const remark = ref('')
 const billDate = ref(getToday())
@@ -107,31 +95,6 @@ const filteredCategories = computed(() => {
 
 function onDateChange(e: any) {
   billDate.value = e.detail.value
-}
-
-function onKey(key: string) {
-  if (key === 'del') {
-    if (inputAmount.value.length > 1) {
-      inputAmount.value = inputAmount.value.slice(0, -1)
-    } else {
-      inputAmount.value = '0'
-    }
-    return
-  }
-  if (key === '.') {
-    if (!inputAmount.value.includes('.')) {
-      inputAmount.value += '.'
-    }
-    return
-  }
-  if (inputAmount.value === '0') {
-    inputAmount.value = key
-  } else {
-    // 限制小数点后2位
-    const parts = inputAmount.value.split('.')
-    if (parts[1] && parts[1].length >= 2) return
-    inputAmount.value += key
-  }
 }
 
 async function handleSubmit() {
@@ -175,7 +138,7 @@ onShow(() => {
 .page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-bottom: 20rpx;
+  padding-bottom: 180rpx;
 }
 
 .type-selector {
@@ -202,8 +165,7 @@ onShow(() => {
 
 .amount-area {
   display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
+  align-items: center;
   padding: 20rpx 30rpx;
   background-color: #fff;
   margin: 0 30rpx 20rpx;
@@ -216,10 +178,16 @@ onShow(() => {
   margin-right: 8rpx;
 }
 
-.amount-display {
-  font-size: 72rpx;
+.amount-input {
+  flex: 1;
+  font-size: 32rpx;
   font-weight: bold;
   color: #333;
+  text-align: right;
+}
+
+.amount-placeholder {
+  color: #ccc;
 }
 
 .date-row {
@@ -256,16 +224,16 @@ onShow(() => {
 .category-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 16rpx;
 }
 
 .category-item {
-  width: calc(25% - 12rpx);
+  width: 25%;
   background-color: #fff;
   padding: 20rpx 0;
   border-radius: 12rpx;
   text-align: center;
   border: 2rpx solid transparent;
+  box-sizing: border-box;
 }
 
 .category-item.selected {
@@ -299,40 +267,23 @@ onShow(() => {
   color: #ccc;
 }
 
-.keyboard {
-  padding: 0 30rpx;
+.submit-area {
+  padding: 30rpx;
 }
 
-.key-row {
-  display: flex;
-  gap: 12rpx;
-  margin-bottom: 12rpx;
-}
-
-.key {
-  flex: 1;
-  height: 90rpx;
-  background-color: #fff;
+.btn-confirm {
+  width: 100%;
+  height: 96rpx;
+  background-color: #667eea;
   border-radius: 12rpx;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: #fff;
   font-size: 32rpx;
-  color: #333;
 }
 
-.key:active {
-  background-color: #eee;
-}
-
-.key-del {
-  background-color: #f0a020;
-  color: #fff;
-}
-
-.key-confirm {
-  background-color: #667eea;
-  color: #fff;
-  height: 90rpx;
+.btn-confirm:active {
+  opacity: 0.8;
 }
 </style>

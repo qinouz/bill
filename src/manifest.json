@@ -7,6 +7,7 @@
   "transformPx": false,
   "mp-weixin": {
     "appid": "wx7d9f723aa9470fe9",
+    "cloudfunctionRoot": "cloudfunctions",
     "setting": {
       "urlCheck": false,
       "es6": true,
