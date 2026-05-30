@@ -1,0 +1,77 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "记账明细",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/bills/bills",
+      "style": {
+        "navigationBarTitleText": "记账"
+      }
+    },
+    {
+      "path": "pages/statistic/statistic",
+      "style": {
+        "navigationBarTitleText": "统计"
+      }
+    },
+    {
+      "path": "pages/mine/mine",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    },
+    {
+      "path": "pages/bill-detail/bill-detail",
+      "style": {
+        "navigationBarTitleText": "账单详情"
+      }
+    },
+    {
+      "path": "pages/category-manage/category-manage",
+      "style": {
+        "navigationBarTitleText": "分类管理"
+      }
+    }
+  ],
+  "tabBar": {
+    "custom": true,
+    "color": "#999999",
+    "selectedColor": "#1296db",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "明细"
+      },
+      {
+        "pagePath": "pages/bills/bills",
+        "text": "记账"
+      },
+      {
+        "pagePath": "pages/statistic/statistic",
+        "text": "统计"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的"
+      }
+    ]
+  },
+  "window": {
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "家庭记账"
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "家庭记账",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F5F5F5"
+  }
+}

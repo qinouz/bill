@@ -1,0 +1,6 @@
+{
+  "name": "categoryList",
+  "version": "1.0.0",
+  "main": "index.js",
+  "description": "Get category list"
+}
