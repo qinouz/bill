@@ -44,8 +44,10 @@
           :class="{ selected: selectedCategory === cat._id }"
           @tap="selectedCategory = cat._id"
         >
-          <text class="category-icon">{{ cat.icon }}</text>
-          <text class="category-name">{{ cat.name }}</text>
+          <view class="category-item-inner">
+            <text class="category-icon">{{ cat.icon }}</text>
+            <text class="category-name">{{ cat.name }}</text>
+          </view>
         </view>
       </view>
     </view>
@@ -60,13 +62,21 @@
       />
     </view>
 
-    <!-- 确认按钮 -->
+    <CustomTabbar />
+    <!-- 底部按钮区域 -->
     <view class="submit-area">
-      <view class="btn-confirm" @tap="handleSubmit">
-        <text>确认记账</text>
+      <view class="btn-row">
+        <!-- 语音按钮 -->
+        <view class="btn-voice" @tap="goVoiceBill">
+          <text class="voice-icon">🎤</text>
+          <text class="voice-label">语音记账</text>
+        </view>
+        <!-- 确认按钮 -->
+        <view class="btn-confirm" @tap="handleSubmit">
+          <text>确认记账</text>
+        </view>
       </view>
     </view>
-    <CustomTabbar />
   </view>
 </template>
 
@@ -95,6 +105,10 @@ const filteredCategories = computed(() => {
 
 function onDateChange(e: any) {
   billDate.value = e.detail.value
+}
+
+function goVoiceBill() {
+  uni.navigateTo({ url: '/pages/voice-bill/voice-bill' })
 }
 
 async function handleSubmit() {
@@ -131,6 +145,17 @@ async function handleSubmit() {
 
 onShow(() => {
   billStore.loadCategories()
+
+  // 读取语音记账结果
+  const voiceResult = uni.getStorageSync('voiceResult')
+  if (voiceResult) {
+    uni.removeStorageSync('voiceResult')
+    currentType.value = voiceResult.type as 'income' | 'expense'
+    inputAmount.value = String(voiceResult.amount)
+    selectedCategory.value = voiceResult.categoryId
+    remark.value = voiceResult.remark
+    billDate.value = voiceResult.billDate
+  }
 })
 </script>
 
@@ -138,7 +163,7 @@ onShow(() => {
 .page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-bottom: 180rpx;
+  padding-bottom: 300rpx;
 }
 
 .type-selector {
@@ -224,16 +249,26 @@ onShow(() => {
 .category-grid {
   display: flex;
   flex-wrap: wrap;
+  margin: -8rpx;
 }
 
 .category-item {
   width: 25%;
+  padding: 8rpx;
+  box-sizing: border-box;
+}
+
+.category-item-inner {
   background-color: #fff;
   padding: 20rpx 0;
   border-radius: 12rpx;
   text-align: center;
   border: 2rpx solid transparent;
-  box-sizing: border-box;
+}
+
+.category-item.selected .category-item-inner {
+  border-color: #667eea;
+  background-color: #f0f4ff;
 }
 
 .category-item.selected {
@@ -268,11 +303,49 @@ onShow(() => {
 }
 
 .submit-area {
-  padding: 30rpx;
+  position: fixed;
+  bottom: 160rpx;
+  left: 0;
+  right: 0;
+  padding: 20rpx 30rpx;
+  background-color: #f5f5f5;
+  z-index: 100;
+}
+
+.btn-row {
+  display: flex;
+  gap: 20rpx;
+  align-items: center;
+}
+
+.btn-voice {
+  width: 180rpx;
+  height: 96rpx;
+  background-color: #fff;
+  border: 2rpx solid #667eea;
+  border-radius: 12rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+}
+
+.btn-voice:active {
+  background-color: #f0f4ff;
+}
+
+.voice-icon {
+  font-size: 36rpx;
+}
+
+.voice-label {
+  font-size: 20rpx;
+  color: #667eea;
 }
 
 .btn-confirm {
-  width: 100%;
+  flex: 1;
   height: 96rpx;
   background-color: #667eea;
   border-radius: 12rpx;

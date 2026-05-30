@@ -1,5 +1,18 @@
 <template>
   <view class="page">
+    <!-- 月份选择 -->
+    <view class="month-bar">
+      <view class="month-btn" @tap="changeMonth(-1)">
+        <text>上月</text>
+      </view>
+      <picker mode="date" fields="month" :value="currentMonth" @change="onMonthChange">
+        <text class="month-title">{{ currentMonth }}</text>
+      </picker>
+      <view class="month-btn" @tap="changeMonth(1)">
+        <text>下月</text>
+      </view>
+    </view>
+
     <!-- 本月汇总 -->
     <view class="summary">
       <view class="summary-item">
@@ -54,12 +67,34 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app'
 import { useBillStore } from '@/store/bill'
+import { useUserStore } from '@/store/user'
 import CustomTabbar from '@/components/custom-tabbar/custom-tabbar.vue'
 
 const billStore = useBillStore()
+
+function getCurrentMonth() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+const currentMonth = ref(getCurrentMonth())
+
+function changeMonth(delta: number) {
+  const [year, month] = currentMonth.value.split('-').map(Number)
+  const date = new Date(year, month - 1 + delta, 1)
+  currentMonth.value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  billStore.setMonth(currentMonth.value)
+  billStore.loadBills(true)
+}
+
+function onMonthChange(e: any) {
+  currentMonth.value = e.detail.value
+  billStore.setMonth(currentMonth.value)
+  billStore.loadBills(true)
+}
 
 const monthIncome = computed(() => {
   return billStore.bills
@@ -98,8 +133,23 @@ function goDetail(billId: string) {
 }
 
 onShow(() => {
-  billStore.loadBills(true)
-  billStore.loadCategories()
+  billStore.setMonth(currentMonth.value)
+
+  // 等待登录完成后再加载数据
+  const userStore = useUserStore()
+  if (userStore.userInfo) {
+    billStore.loadBills(true)
+    billStore.loadCategories()
+  } else {
+    // 监听 userInfo 变化
+    const stopWatch = watch(() => userStore.userInfo, (val: any) => {
+      if (val) {
+        billStore.loadBills(true)
+        billStore.loadCategories()
+        stopWatch()
+      }
+    })
+  }
 })
 
 onPullDownRefresh(async () => {
@@ -117,6 +167,29 @@ onReachBottom(() => {
   min-height: 100vh;
   background-color: #f5f5f5;
   padding-bottom: 180rpx;
+}
+
+.month-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fff;
+  padding: 20rpx 30rpx;
+  gap: 30rpx;
+}
+
+.month-btn {
+  padding: 12rpx 24rpx;
+  background-color: #667eea;
+  border-radius: 8rpx;
+  color: #fff;
+  font-size: 26rpx;
+}
+
+.month-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
 }
 
 .summary {

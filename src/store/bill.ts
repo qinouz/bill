@@ -36,6 +36,7 @@ export const useBillStore = defineStore('bill', () => {
   const total = ref(0)
   const loading = ref(false)
   const hasMore = computed(() => bills.value.length < total.value)
+  const currentMonth = ref('')
 
   async function loadBills(refresh = false) {
     const userStore = useUserStore()
@@ -53,6 +54,7 @@ export const useBillStore = defineStore('bill', () => {
         userId: userStore.userInfo.userId,
         pageSize,
         pageNo: pageNo.value,
+        month: currentMonth.value || undefined,
       })
       if (refresh) {
         bills.value = res.bills
@@ -64,6 +66,10 @@ export const useBillStore = defineStore('bill', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  function setMonth(month: string) {
+    currentMonth.value = month
   }
 
   async function loadCategories() {
@@ -107,10 +113,12 @@ export const useBillStore = defineStore('bill', () => {
     loading,
     hasMore,
     total,
+    currentMonth,
     loadBills,
     loadCategories,
     addBillRecord,
     loadStatistic,
+    setMonth,
     getCategoryName,
     getCategoryIcon,
   }

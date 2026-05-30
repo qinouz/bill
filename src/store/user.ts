@@ -16,16 +16,28 @@ export const useUserStore = defineStore('user', () => {
   const stats = ref({ consecutiveDays: 0, recordDays: 0, billCount: 0 })
 
   async function autoLogin() {
-    try {
-      const data = await loginApi()
-      userInfo.value = data
-      uni.setStorageSync('userInfo', data)
-      // 初始化默认分类
-      initCategories({ userId: data.userId }).catch(() => {})
-    } catch {
-      const cached = uni.getStorageSync('userInfo')
-      if (cached) userInfo.value = cached
+    // 先从缓存读取，立即可用
+    const cached = uni.getStorageSync('userInfo')
+    if (cached) {
+      userInfo.value = cached
     }
+
+    // 后台静默刷新，不阻塞
+    loginApi()
+      .then((data) => {
+        userInfo.value = data
+        uni.setStorageSync('userInfo', data)
+        // 初始化默认分类（仅新用户）
+        if (!cached) {
+          initCategories({ userId: data.userId }).catch(() => {})
+        }
+      })
+      .catch(() => {
+        // API 失败，如果有缓存继续用，没有则标记未登录
+        if (!cached) {
+          userInfo.value = null
+        }
+      })
   }
 
   async function loadStats() {

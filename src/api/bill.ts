@@ -1,6 +1,6 @@
 import { callCloud } from '@/utils/cloud'
 
-export function getBillList(data: { userId: string; pageSize: number; pageNo: number }) {
+export function getBillList(data: { userId: string; pageSize: number; pageNo: number; month?: string }) {
   return callCloud<{ bills: any[]; total: number }>('getBillList', data)
 }
 

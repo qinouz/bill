@@ -15,9 +15,18 @@
       "minified": true
     },
     "usingComponents": true,
+    "plugins": {
+      "WechatSI": {
+        "version": "0.3.6",
+        "provider": "wx069ba97219f66d99"
+      }
+    },
     "permission": {
       "scope.userInfo": {
         "desc": "用于获取用户昵称和头像"
+      },
+      "scope.record": {
+        "desc": "用于语音记账录音识别"
       }
     },
     "cloud": true

@@ -36,6 +36,12 @@
       "style": {
         "navigationBarTitleText": "分类管理"
       }
+    },
+    {
+      "path": "pages/voice-bill/voice-bill",
+      "style": {
+        "navigationBarTitleText": "语音记账"
+      }
     }
   ],
   "tabBar": {

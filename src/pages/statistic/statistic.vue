@@ -112,15 +112,15 @@ onShow(() => {
 }
 
 .year-btn {
-  width: 60rpx;
-  height: 60rpx;
+  padding: 16rpx 24rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   background-color: #667eea;
-  border-radius: 50%;
+  border-radius: 12rpx;
   color: #fff;
   font-size: 28rpx;
+  white-space: nowrap;
 }
 
 .year-title {
