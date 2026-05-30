@@ -24,6 +24,13 @@
         <text class="cat-icon">{{ cat.icon }}</text>
         <text class="cat-name">{{ cat.name }}</text>
         <text v-if="cat.isDefault" class="cat-tag">默认</text>
+        <view
+          v-if="!cat.isDefault"
+          class="cat-delete"
+          @tap.stop="handleDelete(cat)"
+        >
+          <text>删除</text>
+        </view>
       </view>
       <view v-if="filteredCategories.length === 0" class="empty">
         <text>暂无分类</text>
@@ -56,7 +63,7 @@
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useBillStore } from '@/store/bill'
-import { saveCategory } from '@/api/category'
+import { saveCategory, deleteCategory } from '@/api/category'
 import { useUserStore } from '@/store/user'
 
 const billStore = useBillStore()
@@ -97,6 +104,22 @@ async function handleAdd() {
     newIcon.value = ''
     billStore.loadCategories()
   } catch {}
+}
+
+function handleDelete(cat: any) {
+  uni.showModal({
+    title: '确认删除',
+    content: `确定删除分类"${cat.name}"吗？`,
+    success: async (res) => {
+      if (res.confirm) {
+        try {
+          await deleteCategory({ categoryId: cat._id })
+          uni.showToast({ title: '删除成功', icon: 'success' })
+          billStore.loadCategories()
+        } catch {}
+      }
+    },
+  })
 }
 
 onShow(() => {
@@ -161,6 +184,15 @@ onShow(() => {
   background-color: #f5f5f5;
   padding: 4rpx 12rpx;
   border-radius: 8rpx;
+}
+
+.cat-delete {
+  padding: 8rpx 20rpx;
+  background-color: #fff3f3;
+  color: #ff5252;
+  font-size: 24rpx;
+  border-radius: 8rpx;
+  margin-left: 16rpx;
 }
 
 .empty {

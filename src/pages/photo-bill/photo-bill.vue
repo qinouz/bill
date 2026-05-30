@@ -2,29 +2,37 @@
   <view class="page">
     <!-- 顶部提示 -->
     <view class="tip-area">
-      <text class="tip-text">说出你的账单，例如"午饭35块，打车20"</text>
+      <text class="tip-text">拍摄或选择小票、账单截图</text>
     </view>
 
-    <!-- 录音区域 -->
-    <view class="record-area">
-      <!-- 状态提示 -->
-      <view v-if="statusText" class="status-text">
-        <text>{{ statusText }}</text>
+    <!-- 图片区域 -->
+    <view class="image-area">
+      <!-- 已选图片 -->
+      <view v-if="imagePath" class="image-preview">
+        <image :src="imagePath" mode="aspectFit" class="preview-image" />
+        <view class="image-actions">
+          <view class="action-btn" @tap="handleRetake">
+            <text>重新选择</text>
+          </view>
+        </view>
       </view>
 
-      <!-- 录音按钮 -->
-      <view
-        class="record-btn"
-        :class="{ recording: isRecording, processing: isProcessing }"
-        @touchstart="onVoiceStart"
-        @touchend="onVoiceEnd"
-        @touchcancel="onVoiceCancel"
-      >
-        <text class="record-icon">{{ isRecording ? '🔴' : '🎤' }}</text>
-        <text class="record-label">
-          {{ isProcessing ? '识别中...' : (isRecording ? '松开结束' : '长按说话') }}
-        </text>
+      <!-- 选择图片按钮 -->
+      <view v-else class="image-buttons">
+        <view class="img-btn" @tap="handleCamera">
+          <text class="btn-icon">📷</text>
+          <text class="btn-label">拍照</text>
+        </view>
+        <view class="img-btn" @tap="handleAlbum">
+          <text class="btn-icon">🖼️</text>
+          <text class="btn-label">相册</text>
+        </view>
       </view>
+    </view>
+
+    <!-- 状态提示 -->
+    <view v-if="isProcessing" class="status-area">
+      <text class="status-text">正在识别，请稍候...</text>
     </view>
 
     <!-- 账单列表 -->
@@ -106,7 +114,7 @@
       <!-- 操作按钮 -->
       <view class="btn-group">
         <view class="btn btn-retry" @tap="handleRetry">
-          <text>重新录入</text>
+          <text>重新选择</text>
         </view>
         <view
           class="btn btn-confirm"
@@ -145,15 +153,14 @@
 import { ref, computed, nextTick } from 'vue'
 import { useUserStore } from '@/store/user'
 import { useBillStore } from '@/store/bill'
-import { useVoiceRecord } from '@/composables/useVoiceRecord'
-import { recognizeVoice } from '@/api/voice'
+import { recognizePhoto } from '@/api/photo'
 import type { VoiceItem } from '@/api/voice'
 
 const userStore = useUserStore()
 const billStore = useBillStore()
 
-const { isRecording, startRecord, stopRecord, cancelRecord, onResult, onError } = useVoiceRecord()
 const isProcessing = ref(false)
+const imagePath = ref('')
 const billItems = ref<VoiceItem[]>([])
 const showCategoryPicker = ref(false)
 const editingIndex = ref(-1)
@@ -166,15 +173,7 @@ const currentCategories = computed(() => {
   return billStore.categories.filter(c => c.type === type)
 })
 
-// 状态文本
-const statusText = computed(() => {
-  if (isProcessing.value) return '正在识别，请稍候...'
-  if (isRecording.value) return '正在录音...'
-  if (billItems.value.length > 0) return ''
-  return '长按按钮开始录音'
-})
-
-// 有效记录数（有金额和分类）
+// 有效记录数
 const validCount = computed(() => {
   return billItems.value.filter(item => item.amount && item.categoryId).length
 })
@@ -184,52 +183,119 @@ const canConfirm = computed(() => {
   return validCount.value > 0
 })
 
-// 录音完成回调
-onResult(async (tempFilePath: string) => {
-  if (!userStore.userInfo) return
-
-  isProcessing.value = true
-  uni.showLoading({ title: 'AI识别中，约需3-10秒...', mask: true })
-  try {
-    const result = await recognizeVoice(tempFilePath, userStore.userInfo.userId)
-    billItems.value = result.items || []
-    // 等待 DOM 更新后再隐藏 loading
-    await nextTick()
-    // 滚动到列表位置
-    if (billItems.value.length > 0) {
-      uni.pageScrollTo({ selector: '#billList', duration: 300 })
-    }
-  } catch {
-    // error handled by callCloud
-  } finally {
-    uni.hideLoading()
-    isProcessing.value = false
-  }
-})
-
-// 录音错误回调
-onError(() => {
-  uni.hideLoading()
-  isProcessing.value = false
-})
-
-function onVoiceStart() {
-  billItems.value = []
-  startRecord()
+// 拍照
+function handleCamera() {
+  wx.authorize({
+    scope: 'scope.camera',
+    success: () => {
+      wx.chooseMedia({
+        count: 1,
+        mediaType: ['image'],
+        sourceType: ['camera'],
+        sizeType: ['compressed'],
+        success: (res) => {
+          const tempFilePath = res.tempFiles[0].tempFilePath
+          imagePath.value = tempFilePath
+          compressAndProcess(tempFilePath)
+        },
+        fail: (err) => {
+          console.error('拍照失败:', err)
+        },
+      })
+    },
+    fail: () => {
+      uni.showModal({
+        title: '权限提示',
+        content: '需要相机权限才能拍照，请在设置中授权',
+        confirmText: '去设置',
+        success: (modalRes) => {
+          if (modalRes.confirm) {
+            wx.openSetting()
+          }
+        },
+      })
+    },
+  })
 }
 
-function onVoiceEnd() {
-  uni.showLoading({ title: '处理中...' })
-  stopRecord()
+// 从相册选择
+function handleAlbum() {
+  wx.authorize({
+    scope: 'scope.writePhotosAlbum',
+    success: () => {
+      wx.chooseMedia({
+        count: 1,
+        mediaType: ['image'],
+        sourceType: ['album'],
+        sizeType: ['compressed'],
+        success: (res) => {
+          const tempFilePath = res.tempFiles[0].tempFilePath
+          imagePath.value = tempFilePath
+          compressAndProcess(tempFilePath)
+        },
+        fail: (err) => {
+          console.error('选择图片失败:', err)
+        },
+      })
+    },
+    fail: () => {
+      uni.showModal({
+        title: '权限提示',
+        content: '需要相册权限才能选择图片，请在设置中授权',
+        confirmText: '去设置',
+        success: (modalRes) => {
+          if (modalRes.confirm) {
+            wx.openSetting()
+          }
+        },
+      })
+    },
+  })
 }
 
-function onVoiceCancel() {
-  uni.hideLoading()
-  cancelRecord()
-}
-
-function handleRetry() {
-  billItems.value = []
+// 压缩图片后处理（限制最长边 1280px，质量 30，大幅减小上传和推理耗时）
+function compressAndProcess(filePath: string) {
+  uni.getImageInfo({
+    src: filePath,
+    success: (info) => {
+      const maxSide = 1280
+      let targetWidth = info.width
+      let targetHeight = info.height
+      if (info.width > maxSide || info.height > maxSide) {
+        if (info.width > info.height) {
+          targetWidth = maxSide
+          targetHeight = Math.round((info.height * maxSide) / info.width)
+        } else {
+          targetHeight = maxSide
+          targetWidth = Math.round((info.width * maxSide) / info.height)
+        }
+      }
+      uni.compressImage({
+        src: filePath,
+        quality: 30,
+        compressedWidth: targetWidth,
+        compressedHeight: targetHeight,
+        success: (res) => {
+          processImage(res.tempFilePath)
+        },
+        fail: () => {
+          processImage(filePath)
+        },
+      })
+    },
+    fail: () => {
+      uni.compressImage({
+        src: filePath,
+        quality: 30,
+        success: (res) => {
+          processImage(res.tempFilePath)
+        },
+        fail: () => {
+          processImage(filePath)
+        },
+      })
+    },
+  })
 }
 
 // 打开分类选择器
@@ -252,6 +318,49 @@ function selectCategory(cat: any) {
     billItems.value[editingIndex.value].categoryName = cat.name
   }
   closeCategoryPicker()
+}
+
+// 重新选择
+function handleRetake() {
+  imagePath.value = ''
+  billItems.value = []
+}
+
+// 处理图片
+async function processImage(filePath: string) {
+  if (!userStore.userInfo) return
+
+  isProcessing.value = true
+  try {
+    uni.showLoading({ title: 'AI识别中，约需5-15秒...', mask: true })
+
+    // 调用识别（直接传文件路径，API内部会上传到云存储）
+    const result = await recognizePhoto(filePath, userStore.userInfo.userId)
+    billItems.value = result.items || []
+
+    if (billItems.value.length === 0) {
+      uni.showToast({ title: '未识别到账单', icon: 'none' })
+    }
+
+    // 等待 DOM 更新
+    await nextTick()
+    // 滚动到列表
+    if (billItems.value.length > 0) {
+      uni.pageScrollTo({ selector: '#billList', duration: 300 })
+    }
+  } catch (err: any) {
+    console.error('识别失败:', err)
+    uni.showToast({ title: err.message || '识别失败', icon: 'none' })
+  } finally {
+    uni.hideLoading()
+    isProcessing.value = false
+  }
+}
+
+// 重置
+function handleRetry() {
+  imagePath.value = ''
+  billItems.value = []
 }
 
 // 金额变化
@@ -307,9 +416,7 @@ function getConfidenceText(confidence: string) {
 async function handleConfirm() {
   if (!canConfirm.value) return
 
-  // 只保存有效的记录
   const validItems = billItems.value.filter(item => item.amount && item.categoryId)
-
   if (validItems.length === 0) return
 
   uni.showLoading({ title: `保存${validItems.length}条记录...` })
@@ -333,7 +440,6 @@ async function handleConfirm() {
   uni.hideLoading()
   uni.showToast({ title: `成功保存${successCount}条`, icon: 'success' })
 
-  // 延迟返回，让用户看到提示
   setTimeout(() => {
     uni.navigateBack()
   }, 1500)
@@ -358,61 +464,71 @@ async function handleConfirm() {
   color: #999;
 }
 
-.record-area {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 40rpx 0;
-}
-
-.status-text {
+.image-area {
   margin-bottom: 30rpx;
-  padding: 16rpx 32rpx;
-  background-color: #fff;
-  border-radius: 12rpx;
-  font-size: 28rpx;
-  color: #667eea;
 }
 
-.record-btn {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: 50%;
+.image-buttons {
+  display: flex;
+  gap: 30rpx;
+  justify-content: center;
+}
+
+.img-btn {
+  width: 200rpx;
+  height: 200rpx;
   background-color: #fff;
-  border: 4rpx solid #667eea;
+  border: 4rpx dashed #667eea;
+  border-radius: 16rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8rpx;
+  gap: 16rpx;
 }
 
-.record-btn.recording {
-  background-color: #667eea;
-  animation: pulse 1s infinite;
+.btn-icon {
+  font-size: 60rpx;
 }
 
-.record-btn.processing {
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-}
-
-.record-icon {
-  font-size: 48rpx;
-}
-
-.record-label {
-  font-size: 22rpx;
+.btn-label {
+  font-size: 28rpx;
   color: #667eea;
 }
 
-.record-btn.recording .record-label {
-  color: #fff;
+.image-preview {
+  background-color: #fff;
+  border-radius: 16rpx;
+  overflow: hidden;
+}
+
+.preview-image {
+  width: 100%;
+  height: 400rpx;
+}
+
+.image-actions {
+  padding: 20rpx;
+  display: flex;
+  justify-content: center;
+}
+
+.action-btn {
+  padding: 16rpx 40rpx;
+  background-color: #f5f5f5;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  color: #666;
+}
+
+.status-area {
+  text-align: center;
+  padding: 40rpx 0;
+}
+
+.status-text {
+  font-size: 28rpx;
+  color: #667eea;
 }
 
 .bill-list {

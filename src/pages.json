@@ -4,7 +4,8 @@
       "path": "pages/index/index",
       "style": {
         "navigationBarTitleText": "记账明细",
-        "enablePullDownRefresh": true
+        "enablePullDownRefresh": true,
+        "usingComponents": {}
       }
     },
     {
@@ -41,6 +42,18 @@
       "path": "pages/voice-bill/voice-bill",
       "style": {
         "navigationBarTitleText": "语音记账"
+      }
+    },
+    {
+      "path": "pages/photo-bill/photo-bill",
+      "style": {
+        "navigationBarTitleText": "拍照记账"
+      }
+    },
+    {
+      "path": "pages/reminder/reminder",
+      "style": {
+        "navigationBarTitleText": "记账提醒"
       }
     }
   ],

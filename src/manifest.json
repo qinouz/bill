@@ -27,6 +27,9 @@
       },
       "scope.record": {
         "desc": "用于语音记账录音识别"
+      },
+      "scope.camera": {
+        "desc": "用于拍照记账识别小票"
       }
     },
     "cloud": true

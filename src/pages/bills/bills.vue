@@ -69,7 +69,12 @@
         <!-- 语音按钮 -->
         <view class="btn-voice" @tap="goVoiceBill">
           <text class="voice-icon">🎤</text>
-          <text class="voice-label">语音记账</text>
+          <text class="voice-label">语音</text>
+        </view>
+        <!-- 拍照按钮 -->
+        <view class="btn-voice" @tap="goPhotoBill">
+          <text class="voice-icon">📷</text>
+          <text class="voice-label">拍照</text>
         </view>
         <!-- 确认按钮 -->
         <view class="btn-confirm" @tap="handleSubmit">
@@ -111,6 +116,10 @@ function goVoiceBill() {
   uni.navigateTo({ url: '/pages/voice-bill/voice-bill' })
 }
 
+function goPhotoBill() {
+  uni.navigateTo({ url: '/pages/photo-bill/photo-bill' })
+}
+
 async function handleSubmit() {
   if (!selectedCategory.value) {
     uni.showToast({ title: '请选择分类', icon: 'none' })
@@ -145,17 +154,6 @@ async function handleSubmit() {
 
 onShow(() => {
   billStore.loadCategories()
-
-  // 读取语音记账结果
-  const voiceResult = uni.getStorageSync('voiceResult')
-  if (voiceResult) {
-    uni.removeStorageSync('voiceResult')
-    currentType.value = voiceResult.type as 'income' | 'expense'
-    inputAmount.value = String(voiceResult.amount)
-    selectedCategory.value = voiceResult.categoryId
-    remark.value = voiceResult.remark
-    billDate.value = voiceResult.billDate
-  }
 })
 </script>
 
@@ -304,7 +302,7 @@ onShow(() => {
 
 .submit-area {
   position: fixed;
-  bottom: 160rpx;
+  bottom: calc(87rpx + env(safe-area-inset-bottom) + 10rpx);
   left: 0;
   right: 0;
   padding: 20rpx 30rpx;

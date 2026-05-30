@@ -40,18 +40,23 @@
           v-for="bill in group.bills"
           :key="bill._id"
           class="bill-item"
-          @tap="goDetail(bill._id)"
         >
-          <view class="bill-left">
+          <view class="bill-left" @tap="goDetail(bill._id)">
             <text class="bill-icon">{{ billStore.getCategoryIcon(bill.categoryId) }}</text>
             <view class="bill-info">
               <text class="bill-category">{{ billStore.getCategoryName(bill.categoryId) }}</text>
               <text v-if="bill.remark" class="bill-remark">{{ bill.remark }}</text>
             </view>
           </view>
-          <text class="bill-amount" :class="bill.type">
-            {{ bill.type === 'income' ? '+' : '-' }}{{ bill.amount.toFixed(2) }}
-          </text>
+          <view class="bill-right">
+            <text class="bill-date-tag">{{ formatDate(bill.billDate) }}</text>
+            <text class="bill-amount" :class="bill.type">
+              {{ bill.type === 'income' ? '+' : '-' }}{{ bill.amount.toFixed(2) }}
+            </text>
+            <view class="delete-btn" @tap="handleDelete(bill._id)">
+              <text>删除</text>
+            </view>
+          </view>
         </view>
       </view>
 
@@ -71,6 +76,7 @@ import { ref, computed, watch } from 'vue'
 import { onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app'
 import { useBillStore } from '@/store/bill'
 import { useUserStore } from '@/store/user'
+import { deleteBill as deleteBillApi } from '@/api/bill'
 import CustomTabbar from '@/components/custom-tabbar/custom-tabbar.vue'
 
 const billStore = useBillStore()
@@ -128,8 +134,40 @@ function groupExpense(bills: typeof billStore.bills) {
   return expense > 0 ? `-${expense.toFixed(2)}` : ''
 }
 
+function formatDate(billDate: string) {
+  if (!billDate) return ''
+  const parts = billDate.split('-')
+  if (parts.length >= 3) {
+    return `${parts[1]}-${parts[2]}`
+  }
+  return billDate
+}
+
 function goDetail(billId: string) {
   uni.navigateTo({ url: `/pages/bill-detail/bill-detail?id=${billId}` })
+}
+
+async function handleDelete(billId: string) {
+  uni.showModal({
+    title: '确认删除',
+    content: '删除后无法恢复，确认删除这条账单？',
+    success: async (res) => {
+      if (res.confirm) {
+        try {
+          await deleteBillApi({ billId })
+          uni.showToast({ title: '已删除', icon: 'success' })
+          // 本地移除，不刷新
+          const index = billStore.bills.findIndex(b => b._id === billId)
+          if (index > -1) {
+            billStore.bills.splice(index, 1)
+            billStore.total--
+          }
+        } catch {
+          uni.showToast({ title: '删除失败', icon: 'none' })
+        }
+      }
+    },
+  })
 }
 
 onShow(() => {
@@ -290,6 +328,18 @@ onReachBottom(() => {
   display: block;
 }
 
+.bill-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.bill-date-tag {
+  font-size: 22rpx;
+  color: #999;
+  margin-bottom: 4rpx;
+}
+
 .bill-amount {
   font-size: 28rpx;
   font-weight: 600;
@@ -301,6 +351,15 @@ onReachBottom(() => {
 
 .bill-amount.expense {
   color: #333;
+}
+
+.delete-btn {
+  margin-top: 8rpx;
+  padding: 4rpx 16rpx;
+  background-color: #fff3f3;
+  color: #ff5252;
+  font-size: 22rpx;
+  border-radius: 6rpx;
 }
 
 .loading,

@@ -19,3 +19,7 @@ export function saveCategory(data: {
 export function initCategories(data: { userId: string }) {
   return callCloud('initCategories', data)
 }
+
+export function deleteCategory(data: { categoryId: string }) {
+  return callCloud('categoryDelete', data)
+}

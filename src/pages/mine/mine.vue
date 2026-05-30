@@ -34,6 +34,11 @@
         <text class="menu-text">分类管理</text>
         <text class="menu-arrow">›</text>
       </view>
+      <view class="menu-item" @tap="goTo('/pages/reminder/reminder')">
+        <text class="menu-icon">🔔</text>
+        <text class="menu-text">记账提醒</text>
+        <text class="menu-arrow">›</text>
+      </view>
       <view class="menu-item" @tap="showAbout">
         <text class="menu-icon">ℹ️</text>
         <text class="menu-text">关于应用</text>
