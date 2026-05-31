@@ -6,6 +6,8 @@ export function useVoiceRecord() {
   let errorCallback: ((errMsg: string) => void) | null = null
   let recorderManager: UniApp.RecorderManager | null = null
   let isInitialized = false
+  let isCancelled = false  // 标记是否是取消操作
+  let isStarting = false   // 标记录音是否正在启动中
 
   function getRecorder() {
     if (!recorderManager) {
@@ -20,8 +22,24 @@ export function useVoiceRecord() {
 
     const recorder = getRecorder()
 
+    recorder.onStart(() => {
+      isStarting = false
+      // 如果在启动过程中被取消，立即停止
+      if (isCancelled) {
+        recorder.stop()
+        return
+      }
+      isRecording.value = true
+    })
+
     recorder.onStop((res) => {
       isRecording.value = false
+      isStarting = false
+      // 如果是取消操作，不触发 resultCallback
+      if (isCancelled) {
+        isCancelled = false
+        return
+      }
       if (res.tempFilePath) {
         if (resultCallback) {
           resultCallback(res.tempFilePath)
@@ -34,6 +52,8 @@ export function useVoiceRecord() {
 
     recorder.onError((res) => {
       isRecording.value = false
+      isStarting = false
+      isCancelled = false
       console.error('录音错误:', res)
       const errMsg = res.errMsg || '未知错误'
       uni.showToast({ title: '录音失败: ' + errMsg, icon: 'none' })
@@ -43,7 +63,8 @@ export function useVoiceRecord() {
 
   function startRecord() {
     initRecorder()
-    isRecording.value = true
+    isStarting = true
+    isCancelled = false
 
     const recorder = getRecorder()
     recorder.start({
@@ -63,7 +84,12 @@ export function useVoiceRecord() {
   }
 
   function cancelRecord() {
+    isCancelled = true  // 标记为取消
     isRecording.value = false
+    // 如果还在启动中，不调用 stop，等 onStart 回调处理
+    if (isStarting) {
+      return
+    }
     const recorder = getRecorder()
     try {
       recorder.stop()

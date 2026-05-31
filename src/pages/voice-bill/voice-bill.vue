@@ -155,16 +155,27 @@ import { useVoiceRecord } from '@/composables/useVoiceRecord'
 import { recognizeVoice } from '@/api/voice'
 import type { VoiceItem } from '@/api/voice'
 
+import { onUnload } from '@dcloudio/uni-app'
+
 const userStore = useUserStore()
 const billStore = useBillStore()
 
 const { isRecording, startRecord, stopRecord, cancelRecord, onResult, onError } = useVoiceRecord()
+
+// 页面卸载时停止录音
+onUnload(() => {
+  if (isRecording.value) {
+    cancelRecord()
+  }
+})
 const isProcessing = ref(false)
 const recognizedText = ref('')
 const billItems = ref<VoiceItem[]>([])
 const showCategoryPicker = ref(false)
 const recordStartTime = ref(0)
 const editingIndex = ref(-1)
+let longPressTimer: ReturnType<typeof setTimeout> | null = null
+let isLongPress = false
 
 // 当前编辑项的分类列表
 const currentCategories = computed(() => {
@@ -223,36 +234,53 @@ onError(() => {
 })
 
 function onVoiceStart() {
+  isLongPress = false
   billItems.value = []
-  uni.authorize({
-    scope: 'scope.record',
-    success: () => {
-      recordStartTime.value = Date.now()
-      startRecord()
-    },
-    fail: () => {
-      uni.showModal({
-        title: '权限提示',
-        content: '需要录音权限才能使用语音记账，请在设置中授权',
-        confirmText: '去设置',
-        success: (res) => {
-          if (res.confirm) {
-            uni.openSetting()
-          }
-        },
-      })
-    },
-  })
+
+  // 延迟 300ms 后才认为是长按，开始录音
+  longPressTimer = setTimeout(() => {
+    isLongPress = true
+    uni.authorize({
+      scope: 'scope.record',
+      success: () => {
+        recordStartTime.value = Date.now()
+        startRecord()
+      },
+      fail: () => {
+        uni.showModal({
+          title: '权限提示',
+          content: '需要录音权限才能使用语音记账，请在设置中授权',
+          confirmText: '去设置',
+          success: (res) => {
+            if (res.confirm) {
+              uni.openSetting()
+            }
+          },
+        })
+      },
+    })
+  }, 300)
 }
 
 function onVoiceEnd() {
+  // 清除长按定时器
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+
+  // 如果不是长按（按住时间太短），直接返回
+  if (!isLongPress) {
+    return
+  }
+
   // 如果还没开始录音（授权中），直接取消
   if (!isRecording.value) {
     return
   }
 
   const duration = Date.now() - recordStartTime.value
-  if (duration < 2000) {
+  if (duration < 1000) {
     uni.showToast({ title: '说话时间太短，请长按录音', icon: 'none' })
     cancelRecord()
     return
