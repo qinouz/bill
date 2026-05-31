@@ -27,6 +27,12 @@
       </view>
     </view>
 
+    <!-- 识别文字 -->
+    <view v-if="recognizedText" class="recognized-text">
+      <text class="text-label">识别内容：</text>
+      <text class="text-content">{{ recognizedText }}</text>
+    </view>
+
     <!-- 账单列表 -->
     <view v-if="billItems.length > 0" class="bill-list" id="billList">
       <view class="list-header">
@@ -154,8 +160,10 @@ const billStore = useBillStore()
 
 const { isRecording, startRecord, stopRecord, cancelRecord, onResult, onError } = useVoiceRecord()
 const isProcessing = ref(false)
+const recognizedText = ref('')
 const billItems = ref<VoiceItem[]>([])
 const showCategoryPicker = ref(false)
+const recordStartTime = ref(0)
 const editingIndex = ref(-1)
 
 // 当前编辑项的分类列表
@@ -192,6 +200,7 @@ onResult(async (tempFilePath: string) => {
   uni.showLoading({ title: 'AI识别中，约需3-10秒...', mask: true })
   try {
     const result = await recognizeVoice(tempFilePath, userStore.userInfo.userId)
+    recognizedText.value = result.recognizedText || ''
     billItems.value = result.items || []
     // 等待 DOM 更新后再隐藏 loading
     await nextTick()
@@ -215,11 +224,40 @@ onError(() => {
 
 function onVoiceStart() {
   billItems.value = []
-  startRecord()
+  uni.authorize({
+    scope: 'scope.record',
+    success: () => {
+      recordStartTime.value = Date.now()
+      startRecord()
+    },
+    fail: () => {
+      uni.showModal({
+        title: '权限提示',
+        content: '需要录音权限才能使用语音记账，请在设置中授权',
+        confirmText: '去设置',
+        success: (res) => {
+          if (res.confirm) {
+            uni.openSetting()
+          }
+        },
+      })
+    },
+  })
 }
 
 function onVoiceEnd() {
-  uni.showLoading({ title: '处理中...' })
+  // 如果还没开始录音（授权中），直接取消
+  if (!isRecording.value) {
+    return
+  }
+
+  const duration = Date.now() - recordStartTime.value
+  if (duration < 2000) {
+    uni.showToast({ title: '说话时间太短，请长按录音', icon: 'none' })
+    cancelRecord()
+    return
+  }
+  uni.showLoading({ title: 'AI识别中...' })
   stopRecord()
 }
 
@@ -229,6 +267,7 @@ function onVoiceCancel() {
 }
 
 function handleRetry() {
+  recognizedText.value = ''
   billItems.value = []
 }
 
@@ -372,6 +411,26 @@ async function handleConfirm() {
   border-radius: 12rpx;
   font-size: 28rpx;
   color: #667eea;
+}
+
+.recognized-text {
+  padding: 20rpx;
+  background-color: #f8f9ff;
+  border-radius: 12rpx;
+  margin-bottom: 20rpx;
+}
+
+.text-label {
+  font-size: 24rpx;
+  color: #999;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.text-content {
+  font-size: 28rpx;
+  color: #333;
+  line-height: 1.5;
 }
 
 .record-btn {

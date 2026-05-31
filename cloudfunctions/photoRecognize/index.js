@@ -71,7 +71,7 @@ async function parseWithMiMo(imageUrl) {
             ],
           },
         ],
-        max_completion_tokens: 8192,
+        max_completion_tokens: 3048,
         temperature: 0.1,
         stream: false,
       },
@@ -108,29 +108,39 @@ async function parseWithMiMo(imageUrl) {
   }
 }
 
-// 批量查询用户全部分类，在内存中匹配（消除 N+1 查询）
-async function loadUserCategories(userId) {
+// 获取北京时间日期字符串 (YYYY-MM-DD)
+function getBeijingDateStr() {
+  const now = new Date()
+  const beijing = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+  return beijing.toISOString().split('T')[0]
+}
+
+// 批量查询所有分类（缓存复用）
+async function getAllCategories(openid) {
   const db = cloud.database()
   try {
-    const { data } = await db.collection('categories').where({ userId }).get()
-    return data || []
+    const res = await db.collection('categories')
+      .where({ userId: openid })
+      .get()
+    return res.data || []
   } catch (err) {
-    console.error('加载分类失败:', err)
+    console.error('查询分类失败:', err)
     return []
   }
 }
 
+// 从缓存的分类列表中查找匹配
 function findCategoryId(categories, categoryName, type) {
   if (!categoryName) return null
 
+  const filtered = categories.filter(c => c.type === type)
+
   // 精确匹配
-  const exact = categories.find(c => c.type === type && c.name === categoryName)
+  const exact = filtered.find(c => c.name === categoryName)
   if (exact) return exact._id
 
   // 模糊匹配
-  const fuzzy = categories.find(
-    c => c.type === type && (c.name.includes(categoryName) || categoryName.includes(c.name))
-  )
+  const fuzzy = filtered.find(c => c.name.includes(categoryName) || categoryName.includes(c.name))
   return fuzzy ? fuzzy._id : null
 }
 
@@ -142,18 +152,25 @@ function calculateConfidence(amount, categoryId) {
 }
 
 exports.main = async (event, context) => {
-  const { fileID, userId } = event
+  const { fileID } = event
 
-  if (!fileID || !userId) {
+  if (!fileID) {
     return { code: 1, message: '参数不完整' }
   }
 
+  // 获取真实用户身份
+  const wxContext = cloud.getWXContext()
+  const openid = wxContext.OPENID
+
+  if (!openid) {
+    return { code: 1, message: '未登录' }
+  }
+
   try {
-    // 1. 并行获取图片临时URL + 预加载用户分类（两者无依赖，减少冷启动总耗时）
-    const [urlRes, userCategories] = await Promise.all([
-      cloud.getTempFileURL({ fileList: [fileID] }),
-      loadUserCategories(userId),
-    ])
+    // 1. 获取图片临时URL
+    const urlRes = await cloud.getTempFileURL({
+      fileList: [fileID],
+    })
     const imageUrl = urlRes.fileList[0].tempFileURL
 
     console.log('图片 URL:', imageUrl)
@@ -162,16 +179,19 @@ exports.main = async (event, context) => {
     const parsedItems = await parseWithMiMo(imageUrl)
     console.log('MiMo 解析结果:', JSON.stringify(parsedItems))
 
-    // 4. 处理每一条记录（内存中匹配分类，无数据库查询）
+    // 3. 批量查询分类（只查一次数据库）
+    const allCategories = await getAllCategories(openid)
+
+    // 4. 处理每一条记录
     const items = []
     for (const parsed of parsedItems) {
       const type = parsed.type || 'expense'
-      const categoryId = findCategoryId(userCategories, parsed.category, type)
+      const categoryId = findCategoryId(allCategories, parsed.category, type)
       const confidence = calculateConfidence(parsed.amount, categoryId)
 
       let billDate = parsed.date
       if (!billDate) {
-        billDate = new Date().toISOString().split('T')[0]
+        billDate = getBeijingDateStr()
       }
 
       items.push({

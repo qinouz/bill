@@ -11,6 +11,7 @@ export interface VoiceItem {
 }
 
 export interface VoiceParseResult {
+  recognizedText: string
   items: VoiceItem[]
 }
 
@@ -25,11 +26,10 @@ export async function recognizeVoice(tempFilePath: string, userId: string): Prom
     filePath: tempFilePath,
   })
 
-  // 2. 调用识别云函数（使用 MiMo 音频理解）
+  // 2. 调用识别云函数（传文件ID，云函数会获取临时URL）
   const result = await callCloud<VoiceParseResult>('audioRecognize', {
     fileID: uploadRes.fileID,
     userId,
-    mimeType: ext === 'mp3' ? 'audio/mp3' : 'audio/m4a',
   })
 
   return result

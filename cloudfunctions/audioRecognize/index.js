@@ -7,7 +7,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const MIMO_API_KEY = process.env.MIMO_API_KEY
 
 // 调用 MiMo 理解音频并提取账单信息
-async function parseAudioWithMiMo(audioBase64, mimeType) {
+async function parseAudioWithMiMo(audioUrl) {
   const today = new Date()
   const dateStr = today.toISOString().split('T')[0]
   const weekDays = ['日', '一', '二', '三', '四', '五', '六']
@@ -15,30 +15,37 @@ async function parseAudioWithMiMo(audioBase64, mimeType) {
 
   const systemPrompt = `你是MiMo，是小米公司研发的AI智能助手。今天的日期：${dateStr} ${weekStr}，你的知识截止日期是2024年12月。`
 
-  const userPrompt = `你是一个记账助手，请听这段语音，从中提取所有账单信息。
+  const userPrompt = `你是一个记账助手，请听这段语音，先转写文字，再从中提取所有账单信息。
 
-用户可能说了多条账单，请逐条提取。返回一个 JSON 数组，每个元素代表一条账单：
-[
-  {
-    "amount": 数字金额（如 35.5），如果没有识别到金额则为 null,
-    "type": "expense" 或 "income"，默认为 "expense",
-    "category": 分类名称，从以下选项中选择最合适的一个：
-      支出分类：餐饮、购物、日用、交通、蔬菜、水果、零食、运动、娱乐、通讯、服饰、美容、住房、居家、孩子、长辈、社交、旅行、烟酒、数码、汽车、医疗、书籍、学习
-      收入分类：工资、兼职、理财、礼金、其它
-    如果无法匹配则返回 null,
-    "date": 日期，格式为 YYYY-MM-DD，支持"今天"、"昨天"、"前天"、"X号"、"X月X号"等表述，默认为今天,
-    "remark": 备注信息，提取除金额、分类、日期外的其他有用信息
-  }
-]
+请返回一个 JSON 对象，格式如下：
+{
+  "text": "语音转写的文字内容",
+  "items": [
+    {
+      "amount": 数字金额（如 35.5），如果没有识别到金额则为 null,
+      "type": "expense" 或 "income"，默认为 "expense",
+      "category": 分类名称，从以下选项中选择最合适的一个：
+        支出分类：餐饮、购物、日用、交通、蔬菜、水果、零食、运动、娱乐、通讯、服饰、美容、住房、居家、孩子、长辈、社交、旅行、烟酒、数码、汽车、医疗、书籍、学习
+        收入分类：工资、兼职、理财、礼金、其它
+      如果无法匹配则返回 null,
+      "date": 日期，格式为 YYYY-MM-DD，支持"今天"、"昨天"、"前天"、"X号"、"X月X号"等表述，默认为今天,
+      "remark": 备注信息，提取除金额、分类、日期外的其他有用信息
+    }
+  ]
+}
 
 注意：
-1. 只返回 JSON 数组，不要有其他文字
+1. 只返回 JSON，不要有其他文字
 2. 金额必须是数字，不能是字符串
 3. 如果用户说的是收入（如"收到工资5000"），type 设为 "income"
 4. 如果无法确定分类，category 设为 null
-5. 如果只有一条账单，也返回数组（只有一个元素）`
+5. text 字段是语音的原始文字转写
+6. 如果语音中没有识别到账单内容，或者语音不清晰，请返回空数组：{"text": "", "items": []}
+7. 不要编造内容，只提取语音中实际提到的信息`
 
   try {
+    console.log('开始调用 MiMo API...')
+    const startTime = Date.now()
     const response = await axios.post(
       'https://token-plan-cn.xiaomimimo.com/v1/chat/completions',
       {
@@ -54,7 +61,7 @@ async function parseAudioWithMiMo(audioBase64, mimeType) {
               {
                 type: 'input_audio',
                 input_audio: {
-                  data: `data:${mimeType};base64,${audioBase64}`,
+                  data: audioUrl,
                 },
               },
               {
@@ -78,10 +85,12 @@ async function parseAudioWithMiMo(audioBase64, mimeType) {
     )
 
     const content = response.data.choices?.[0]?.message?.content || ''
+    const duration = Date.now() - startTime
+    console.log(`MiMo API 调用完成，耗时: ${duration}ms`)
     console.log('MiMo 返回内容:', content)
 
-    // 提取 JSON（可能是数组或对象）
-    const jsonMatch = content.match(/\[[\s\S]*\]/) || content.match(/\{[\s\S]*\}/)
+    // 提取 JSON 对象
+    const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       console.error('无法提取 JSON, 原始内容:', content)
       throw new Error('MiMo 返回格式错误')
@@ -90,8 +99,11 @@ async function parseAudioWithMiMo(audioBase64, mimeType) {
     console.log('提取到的 JSON:', jsonMatch[0])
 
     const parsed = JSON.parse(jsonMatch[0])
-    // 统一返回数组格式
-    return Array.isArray(parsed) ? parsed : [parsed]
+    // 返回 { text, items } 格式
+    return {
+      text: parsed.text || '',
+      items: Array.isArray(parsed.items) ? parsed.items : (parsed.items ? [parsed.items] : [])
+    }
   } catch (err) {
     console.error('MiMo 调用失败:', err)
     throw new Error('语音解析失败: ' + (err.message || '未知错误'))
@@ -140,25 +152,29 @@ function calculateConfidence(amount, categoryId) {
 }
 
 exports.main = async (event, context) => {
-  const { fileID, userId, mimeType } = event
+  const { fileID, userId } = event
 
   if (!fileID || !userId) {
     return { code: 1, message: '参数不完整' }
   }
 
   try {
-    // 1. 从云存储下载音频文件
-    const fileRes = await cloud.downloadFile({ fileID })
-    const audioBuffer = fileRes.fileContent
+    // 1. 获取音频临时 URL
+    const urlRes = await cloud.getTempFileURL({
+      fileList: [fileID],
+    })
+    const audioUrl = urlRes.fileList[0].tempFileURL
 
-    // 2. 转换为 base64
-    const audioBase64 = audioBuffer.toString('base64')
+    console.log('音频 URL:', audioUrl)
 
-    // 3. 调用 MiMo 理解音频（返回数组）
-    const mime = mimeType || 'audio/mp3'
-    const parsedItems = await parseAudioWithMiMo(audioBase64, mime)
+    // 2. 调用 MiMo 理解音频（直接传 URL）
+    const result = await parseAudioWithMiMo(audioUrl)
+    const recognizedText = result.text
+    const parsedItems = result.items
 
-    // 4. 处理每一条记录
+    console.log('MiMo 解析结果:', JSON.stringify(result))
+
+    // 3. 处理每一条记录
     const items = []
     for (const parsed of parsedItems) {
       const type = parsed.type || 'expense'
@@ -184,6 +200,7 @@ exports.main = async (event, context) => {
     return {
       code: 0,
       data: {
+        recognizedText,
         items,
       },
       message: 'success',
