@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getBillList, addBill as addBillApi, getBillStatistic } from '@/api/bill'
+import { getBillList, addBill as addBillApi, addBillBatch, getBillStatistic, type BillItem } from '@/api/bill'
 import { getCategoryList } from '@/api/category'
 import { useUserStore } from './user'
 
@@ -79,16 +79,12 @@ export const useBillStore = defineStore('bill', () => {
     categories.value = res.categories
   }
 
-  async function addBillRecord(data: {
-    categoryId: string
-    amount: number
-    type: 'income' | 'expense'
-    remark: string
-    billDate: string
-  }) {
-    const userStore = useUserStore()
-    if (!userStore.userInfo) return
-    await addBillApi({ userId: userStore.userInfo.userId, ...data })
+  async function addBillRecord(data: BillItem) {
+    await addBillApi(data as any)
+  }
+
+  async function addBillRecords(items: BillItem[]) {
+    return await addBillBatch(items)
   }
 
   async function loadStatistic(year: number) {
@@ -117,6 +113,7 @@ export const useBillStore = defineStore('bill', () => {
     loadBills,
     loadCategories,
     addBillRecord,
+    addBillRecords,
     loadStatistic,
     setMonth,
     getCategoryName,

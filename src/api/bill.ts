@@ -1,18 +1,25 @@
 import { callCloud } from '@/utils/cloud'
 
+export interface BillItem {
+  categoryId: string
+  amount: number
+  type: 'income' | 'expense'
+  remark?: string
+  billDate: string
+}
+
 export function getBillList(data: { userId: string; pageSize: number; pageNo: number; month?: string }) {
   return callCloud<{ bills: any[]; total: number }>('getBillList', data)
 }
 
-export function addBill(data: {
-  userId: string
-  categoryId: string
-  amount: number
-  type: 'income' | 'expense'
-  remark: string
-  billDate: string
-}) {
+// 单条添加
+export function addBill(data: Omit<BillItem, 'userId'>) {
   return callCloud<{ billId: string }>('addBill', data)
+}
+
+// 批量添加
+export function addBillBatch(items: Omit<BillItem, 'userId'>[]) {
+  return callCloud<{ billIds: string[]; count: number }>('addBill', { items })
 }
 
 export function editBill(data: {

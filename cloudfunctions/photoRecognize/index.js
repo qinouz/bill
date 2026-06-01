@@ -2,9 +2,56 @@ const cloud = require('wx-server-sdk')
 const axios = require('axios')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+const db = cloud.database()
 
 // 从环境变量读取配置
 const MIMO_API_KEY = process.env.MIMO_API_KEY
+
+// 根据 openid 查询用户 _id
+async function getUserIdByOpenid(openid) {
+  try {
+    const userRes = await db.collection('users').where({ openid }).get()
+    return userRes.data.length > 0 ? userRes.data[0]._id : null
+  } catch (err) {
+    console.error('查询用户失败:', err)
+    return null
+  }
+}
+
+// 获取用户所有分类
+async function getAllCategories(userId) {
+  try {
+    const res = await db.collection('categories').where({ userId }).get()
+    return res.data || []
+  } catch (err) {
+    console.error('查询分类失败:', err)
+    return []
+  }
+}
+
+// 查找分类 ID
+function findCategoryId(categories, categoryName, type) {
+  if (!categoryName) return null
+  const filtered = categories.filter(c => c.type === type)
+  const exact = filtered.find(c => c.name === categoryName)
+  if (exact) return exact._id
+  const fuzzy = filtered.find(c => c.name.includes(categoryName) || categoryName.includes(c.name))
+  return fuzzy ? fuzzy._id : null
+}
+
+// 计算置信度
+function calculateConfidence(amount, categoryId) {
+  if (amount && categoryId) return 'high'
+  if (amount || categoryId) return 'medium'
+  return 'low'
+}
+
+// 获取北京时间日期
+function getBeijingDateStr() {
+  const now = new Date()
+  const beijing = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+  return beijing.toISOString().split('T')[0]
+}
 
 // 调用 MiMo 解析图片中的账单信息
 async function parseWithMiMo(imageUrl) {
@@ -80,7 +127,7 @@ async function parseWithMiMo(imageUrl) {
           'Content-Type': 'application/json',
           'api-key': MIMO_API_KEY,
         },
-        timeout: 60000,
+        timeout: 30000,
       }
     )
 
@@ -106,49 +153,6 @@ async function parseWithMiMo(imageUrl) {
     console.error('MiMo 调用失败:', err)
     throw new Error('图片解析失败: ' + (err.message || '未知错误'))
   }
-}
-
-// 获取北京时间日期字符串 (YYYY-MM-DD)
-function getBeijingDateStr() {
-  const now = new Date()
-  const beijing = new Date(now.getTime() + 8 * 60 * 60 * 1000)
-  return beijing.toISOString().split('T')[0]
-}
-
-// 批量查询所有分类（缓存复用）
-async function getAllCategories(openid) {
-  const db = cloud.database()
-  try {
-    const res = await db.collection('categories')
-      .where({ userId: openid })
-      .get()
-    return res.data || []
-  } catch (err) {
-    console.error('查询分类失败:', err)
-    return []
-  }
-}
-
-// 从缓存的分类列表中查找匹配
-function findCategoryId(categories, categoryName, type) {
-  if (!categoryName) return null
-
-  const filtered = categories.filter(c => c.type === type)
-
-  // 精确匹配
-  const exact = filtered.find(c => c.name === categoryName)
-  if (exact) return exact._id
-
-  // 模糊匹配
-  const fuzzy = filtered.find(c => c.name.includes(categoryName) || categoryName.includes(c.name))
-  return fuzzy ? fuzzy._id : null
-}
-
-// 计算置信度
-function calculateConfidence(amount, categoryId) {
-  if (amount && categoryId) return 'high'
-  if (amount || categoryId) return 'medium'
-  return 'low'
 }
 
 exports.main = async (event, context) => {
@@ -179,10 +183,20 @@ exports.main = async (event, context) => {
     const parsedItems = await parseWithMiMo(imageUrl)
     console.log('MiMo 解析结果:', JSON.stringify(parsedItems))
 
-    // 3. 批量查询分类（只查一次数据库）
-    const allCategories = await getAllCategories(openid)
+    // 3. 查询用户ID（分类用userId存储，不是openid）
+    const userId = await getUserIdByOpenid(openid)
+    if (!userId) {
+      return { code: 1, message: '用户不存在' }
+    }
+
+    // 4. 批量查询分类（只查一次数据库）
+    const allCategories = await getAllCategories(userId)
 
     // 4. 处理每一条记录
+    console.log('用户ID:', userId)
+    console.log('分类列表:', JSON.stringify(allCategories))
+    console.log('解析的项目:', JSON.stringify(parsedItems))
+
     const items = []
     for (const parsed of parsedItems) {
       const type = parsed.type || 'expense'
@@ -194,6 +208,8 @@ exports.main = async (event, context) => {
         billDate = getBeijingDateStr()
       }
 
+      console.log('处理项目:', { category: parsed.category, type, categoryId, amount: parsed.amount })
+
       items.push({
         amount: parsed.amount,
         categoryId,
@@ -204,6 +220,8 @@ exports.main = async (event, context) => {
         confidence,
       })
     }
+
+    console.log('最终结果:', JSON.stringify(items))
 
     return {
       code: 0,

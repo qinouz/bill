@@ -182,7 +182,7 @@ const currentCategories = computed(() => {
   if (editingIndex.value < 0) return []
   const item = billItems.value[editingIndex.value]
   const type = item?.type || 'expense'
-  return billStore.categories.filter(c => c.type === type)
+  return billStore.categories.filter((c: any) => c.type === type)
 })
 
 // 状态文本
@@ -195,7 +195,7 @@ const statusText = computed(() => {
 
 // 有效记录数（有金额和分类）
 const validCount = computed(() => {
-  return billItems.value.filter(item => item.amount && item.categoryId).length
+  return billItems.value.filter((item: any) => item.amount && item.categoryId).length
 })
 
 // 是否可确认
@@ -210,7 +210,7 @@ onResult(async (tempFilePath: string) => {
   isProcessing.value = true
   uni.showLoading({ title: 'AI识别中，约需3-10秒...', mask: true })
   try {
-    const result = await recognizeVoice(tempFilePath, userStore.userInfo.userId)
+    const result = await recognizeVoice(tempFilePath)
     recognizedText.value = result.recognizedText || ''
     billItems.value = result.items || []
     // 等待 DOM 更新后再隐藏 loading
@@ -375,30 +375,21 @@ async function handleConfirm() {
   if (!canConfirm.value) return
 
   // 只保存有效的记录
-  const validItems = billItems.value.filter(item => item.amount && item.categoryId)
+  const validItems = billItems.value.filter((item: any) => item.amount && item.categoryId)
 
   if (validItems.length === 0) return
 
-  uni.showLoading({ title: `保存${validItems.length}条记录...` })
-  let successCount = 0
+  uni.showLoading({ title: '保存中...' })
 
-  for (const item of validItems) {
-    try {
-      await billStore.addBillRecord({
-        categoryId: item.categoryId!,
-        amount: item.amount!,
-        type: item.type,
-        remark: item.remark,
-        billDate: item.billDate,
-      })
-      successCount++
-    } catch {
-      // 单条失败继续下一条
-    }
+  try {
+    const result = await billStore.addBillRecords(validItems as any[])
+    uni.hideLoading()
+    uni.showToast({ title: `成功保存${result.count}条`, icon: 'success' })
+  } catch {
+    uni.hideLoading()
+    uni.showToast({ title: '保存失败', icon: 'none' })
+    return
   }
-
-  uni.hideLoading()
-  uni.showToast({ title: `成功保存${successCount}条`, icon: 'success' })
 
   // 延迟返回，让用户看到提示
   setTimeout(() => {

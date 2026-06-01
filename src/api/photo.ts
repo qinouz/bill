@@ -6,10 +6,10 @@ export interface PhotoParseResult {
 }
 
 // 上传图片到云存储并识别
-export async function recognizePhoto(filePath: string, userId: string): Promise<PhotoParseResult> {
+export async function recognizePhoto(filePath: string): Promise<PhotoParseResult> {
   // 1. 上传到云存储
   const ext = filePath.split('.').pop() || 'jpg'
-  const cloudPath = `photo/${userId}/${Date.now()}.${ext}`
+  const cloudPath = `photo/${Date.now()}.${ext}`
 
   const uploadRes = await uni.cloud.uploadFile({
     cloudPath,
@@ -19,7 +19,6 @@ export async function recognizePhoto(filePath: string, userId: string): Promise<
   // 2. 调用识别云函数（传文件ID）
   const result = await callCloud<PhotoParseResult>('photoRecognize', {
     fileID: uploadRes.fileID,
-    userId,
   })
 
   return result

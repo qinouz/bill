@@ -2,9 +2,56 @@ const cloud = require('wx-server-sdk')
 const axios = require('axios')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+const db = cloud.database()
 
 // 从环境变量读取配置
 const MIMO_API_KEY = process.env.MIMO_API_KEY
+
+// 根据 openid 查询用户 _id
+async function getUserIdByOpenid(openid) {
+  try {
+    const userRes = await db.collection('users').where({ openid }).get()
+    return userRes.data.length > 0 ? userRes.data[0]._id : null
+  } catch (err) {
+    console.error('查询用户失败:', err)
+    return null
+  }
+}
+
+// 获取用户所有分类
+async function getAllCategories(userId) {
+  try {
+    const res = await db.collection('categories').where({ userId }).get()
+    return res.data || []
+  } catch (err) {
+    console.error('查询分类失败:', err)
+    return []
+  }
+}
+
+// 查找分类 ID
+function findCategoryId(categories, categoryName, type) {
+  if (!categoryName) return null
+  const filtered = categories.filter(c => c.type === type)
+  const exact = filtered.find(c => c.name === categoryName)
+  if (exact) return exact._id
+  const fuzzy = filtered.find(c => c.name.includes(categoryName) || categoryName.includes(c.name))
+  return fuzzy ? fuzzy._id : null
+}
+
+// 计算置信度
+function calculateConfidence(amount, categoryId) {
+  if (amount && categoryId) return 'high'
+  if (amount || categoryId) return 'medium'
+  return 'low'
+}
+
+// 获取北京时间日期
+function getBeijingDateStr() {
+  const now = new Date()
+  const beijing = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+  return beijing.toISOString().split('T')[0]
+}
 
 // 调用 MiMo 理解音频并提取账单信息
 async function parseAudioWithMiMo(audioUrl) {
@@ -110,52 +157,25 @@ async function parseAudioWithMiMo(audioUrl) {
   }
 }
 
-// 查询分类 ID
-async function getCategoryId(userId, categoryName, type) {
-  if (!categoryName) return null
-
-  const db = cloud.database()
-  try {
-    const catRes = await db.collection('categories')
-      .where({
-        userId,
-        name: categoryName,
-        type,
-      })
-      .get()
-
-    if (catRes.data.length > 0) {
-      return catRes.data[0]._id
-    }
-
-    // 如果找不到精确匹配，尝试模糊匹配
-    const fuzzyRes = await db.collection('categories')
-      .where({
-        userId,
-        type,
-      })
-      .get()
-
-    const matched = fuzzyRes.data.find(c => c.name.includes(categoryName) || categoryName.includes(c.name))
-    return matched ? matched._id : null
-  } catch (err) {
-    console.error('查询分类失败:', err)
-    return null
-  }
-}
-
-// 计算置信度
-function calculateConfidence(amount, categoryId) {
-  if (amount && categoryId) return 'high'
-  if (amount || categoryId) return 'medium'
-  return 'low'
-}
-
 exports.main = async (event, context) => {
-  const { fileID, userId } = event
+  const { fileID } = event
 
-  if (!fileID || !userId) {
+  if (!fileID) {
     return { code: 1, message: '参数不完整' }
+  }
+
+  // 从服务端获取用户身份（不可伪造）
+  const wxContext = cloud.getWXContext()
+  const openid = wxContext.OPENID
+
+  if (!openid) {
+    return { code: 1, message: '未登录' }
+  }
+
+  // 查询用户 ID
+  const userId = await getUserIdByOpenid(openid)
+  if (!userId) {
+    return { code: 1, message: '用户不存在' }
   }
 
   try {
@@ -174,16 +194,18 @@ exports.main = async (event, context) => {
 
     console.log('MiMo 解析结果:', JSON.stringify(result))
 
-    // 3. 处理每一条记录
+    // 3. 批量查询分类（只查一次数据库）
+    const allCategories = await getAllCategories(userId)
+
+    // 4. 处理每一条记录
     const items = []
     for (const parsed of parsedItems) {
       const type = parsed.type || 'expense'
-      const categoryId = await getCategoryId(userId, parsed.category, type)
-      const confidence = calculateConfidence(parsed.amount, categoryId)
+      const categoryId = findCategoryId(allCategories, parsed.category, type)
 
       let billDate = parsed.date
       if (!billDate) {
-        billDate = new Date().toISOString().split('T')[0]
+        billDate = getBeijingDateStr()
       }
 
       items.push({
@@ -193,7 +215,6 @@ exports.main = async (event, context) => {
         type,
         remark: parsed.remark || '',
         billDate,
-        confidence,
       })
     }
 

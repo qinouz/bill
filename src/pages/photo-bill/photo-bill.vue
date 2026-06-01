@@ -170,12 +170,12 @@ const currentCategories = computed(() => {
   if (editingIndex.value < 0) return []
   const item = billItems.value[editingIndex.value]
   const type = item?.type || 'expense'
-  return billStore.categories.filter(c => c.type === type)
+  return billStore.categories.filter((c: any) => c.type === type)
 })
 
 // 有效记录数
 const validCount = computed(() => {
-  return billItems.value.filter(item => item.amount && item.categoryId).length
+  return billItems.value.filter((item: any) => item.amount && item.categoryId).length
 })
 
 // 是否可确认
@@ -185,20 +185,20 @@ const canConfirm = computed(() => {
 
 // 拍照
 function handleCamera() {
-  wx.authorize({
+  uni.authorize({
     scope: 'scope.camera',
     success: () => {
-      wx.chooseMedia({
+      uni.chooseMedia({
         count: 1,
         mediaType: ['image'],
         sourceType: ['camera'],
         sizeType: ['compressed'],
-        success: (res) => {
+        success: (res: any) => {
           const tempFilePath = res.tempFiles[0].tempFilePath
           imagePath.value = tempFilePath
           compressAndProcess(tempFilePath)
         },
-        fail: (err) => {
+        fail: (err: any) => {
           console.error('拍照失败:', err)
         },
       })
@@ -208,9 +208,9 @@ function handleCamera() {
         title: '权限提示',
         content: '需要相机权限才能拍照，请在设置中授权',
         confirmText: '去设置',
-        success: (modalRes) => {
+        success: (modalRes: any) => {
           if (modalRes.confirm) {
-            wx.openSetting()
+            uni.openSetting()
           }
         },
       })
@@ -220,20 +220,20 @@ function handleCamera() {
 
 // 从相册选择
 function handleAlbum() {
-  wx.authorize({
+  uni.authorize({
     scope: 'scope.writePhotosAlbum',
     success: () => {
-      wx.chooseMedia({
+      uni.chooseMedia({
         count: 1,
         mediaType: ['image'],
         sourceType: ['album'],
         sizeType: ['compressed'],
-        success: (res) => {
+        success: (res: any) => {
           const tempFilePath = res.tempFiles[0].tempFilePath
           imagePath.value = tempFilePath
           compressAndProcess(tempFilePath)
         },
-        fail: (err) => {
+        fail: (err: any) => {
           console.error('选择图片失败:', err)
         },
       })
@@ -243,9 +243,9 @@ function handleAlbum() {
         title: '权限提示',
         content: '需要相册权限才能选择图片，请在设置中授权',
         confirmText: '去设置',
-        success: (modalRes) => {
+        success: (modalRes: any) => {
           if (modalRes.confirm) {
-            wx.openSetting()
+            uni.openSetting()
           }
         },
       })
@@ -335,7 +335,7 @@ async function processImage(filePath: string) {
     uni.showLoading({ title: 'AI识别中，约需5-15秒...', mask: true })
 
     // 调用识别（直接传文件路径，API内部会上传到云存储）
-    const result = await recognizePhoto(filePath, userStore.userInfo.userId)
+    const result = await recognizePhoto(filePath)
     billItems.value = result.items || []
 
     if (billItems.value.length === 0) {
@@ -416,29 +416,20 @@ function getConfidenceText(confidence: string) {
 async function handleConfirm() {
   if (!canConfirm.value) return
 
-  const validItems = billItems.value.filter(item => item.amount && item.categoryId)
+  const validItems = billItems.value.filter((item: any) => item.amount && item.categoryId)
   if (validItems.length === 0) return
 
-  uni.showLoading({ title: `保存${validItems.length}条记录...` })
-  let successCount = 0
+  uni.showLoading({ title: '保存中...' })
 
-  for (const item of validItems) {
-    try {
-      await billStore.addBillRecord({
-        categoryId: item.categoryId!,
-        amount: item.amount!,
-        type: item.type,
-        remark: item.remark,
-        billDate: item.billDate,
-      })
-      successCount++
-    } catch {
-      // 单条失败继续下一条
-    }
+  try {
+    const result = await billStore.addBillRecords(validItems as any[])
+    uni.hideLoading()
+    uni.showToast({ title: `成功保存${result.count}条`, icon: 'success' })
+  } catch {
+    uni.hideLoading()
+    uni.showToast({ title: '保存失败', icon: 'none' })
+    return
   }
-
-  uni.hideLoading()
-  uni.showToast({ title: `成功保存${successCount}条`, icon: 'success' })
 
   setTimeout(() => {
     uni.navigateBack()

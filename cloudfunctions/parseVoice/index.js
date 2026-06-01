@@ -1,8 +1,18 @@
 const cloud = require('wx-server-sdk')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
-
 const db = cloud.database()
+
+// 根据 openid 查询用户 _id
+async function getUserIdByOpenid(openid) {
+  try {
+    const userRes = await db.collection('users').where({ openid }).get()
+    return userRes.data.length > 0 ? userRes.data[0]._id : null
+  } catch (err) {
+    console.error('查询用户失败:', err)
+    return null
+  }
+}
 
 // 分类关键词映射
 const categoryKeywords = {
@@ -242,10 +252,24 @@ function extractRemark(text, amount, categoryName, dateStr) {
 }
 
 exports.main = async (event, context) => {
-  const { text, userId } = event
+  const { text } = event
 
-  if (!text || !userId) {
+  if (!text) {
     return { code: 1, message: '参数不完整' }
+  }
+
+  // 从服务端获取用户身份（不可伪造）
+  const wxContext = cloud.getWXContext()
+  const openid = wxContext.OPENID
+
+  if (!openid) {
+    return { code: 1, message: '未登录' }
+  }
+
+  // 查询用户 ID
+  const userId = await getUserIdByOpenid(openid)
+  if (!userId) {
+    return { code: 1, message: '用户不存在' }
   }
 
   try {
