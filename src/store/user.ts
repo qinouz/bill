@@ -4,46 +4,51 @@ import { login as loginApi, getUserStats } from '@/api/user'
 import { initCategories } from '@/api/category'
 
 export interface User {
-  openid: string
   userId: string
-  nickName: string
+  nickname: string
   avatarUrl: string
 }
 
 export const useUserStore = defineStore('user', () => {
   const userInfo = ref<User | null>(null)
-  const isLogin = computed(() => !!userInfo.value)
+  const isLogin = computed(() => !!userInfo.value && !!uni.getStorageSync('token'))
   const stats = ref({ consecutiveDays: 0, recordDays: 0, billCount: 0 })
 
   async function autoLogin() {
     // 先从缓存读取，立即可用
     const cached = uni.getStorageSync('userInfo')
-    if (cached) {
+    const token = uni.getStorageSync('token')
+    if (cached && token) {
       userInfo.value = cached
     }
 
-    // 后台静默刷新，不阻塞
-    loginApi()
-      .then((data) => {
-        userInfo.value = data
-        uni.setStorageSync('userInfo', data)
-        // 初始化默认分类（仅新用户）
-        if (!cached) {
-          initCategories({ userId: data.userId }).catch(() => {})
-        }
-      })
-      .catch(() => {
-        // API 失败，如果有缓存继续用，没有则标记未登录
-        if (!cached) {
-          userInfo.value = null
-        }
-      })
+    try {
+      // 调用登录（内部会调用 uni.login 获取 code）
+      const data = await loginApi()
+
+      const user: User = {
+        userId: data.userId,
+        nickname: data.nickname,
+        avatarUrl: data.avatarUrl,
+      }
+      userInfo.value = user
+
+      // 初始化默认分类（仅新用户）
+      if (!cached) {
+        initCategories().catch(() => {})
+      }
+    } catch (error) {
+      console.error('登录失败:', error)
+      if (!cached) {
+        userInfo.value = null
+      }
+    }
   }
 
   async function loadStats() {
-    if (!userInfo.value) return
+    if (!isLogin.value) return
     try {
-      const data = await getUserStats({ userId: userInfo.value.userId })
+      const data = await getUserStats()
       stats.value = data
     } catch {}
   }
@@ -51,6 +56,7 @@ export const useUserStore = defineStore('user', () => {
   function clearUserInfo() {
     userInfo.value = null
     uni.removeStorageSync('userInfo')
+    uni.removeStorageSync('token')
   }
 
   return {

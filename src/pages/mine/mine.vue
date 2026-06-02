@@ -6,8 +6,8 @@
         <image :src="userStore.userInfo?.avatarUrl || '/static/default-avatar.png'" mode="aspectFill" />
       </view>
       <view class="user-info">
-        <text class="user-name">{{ userStore.userInfo?.nickName || '未登录' }}</text>
-        <text class="user-id">{{ userStore.userInfo?.openid || '点击登录' }}</text>
+        <text class="user-name">{{ userStore.userInfo?.nickname || '未登录' }}</text>
+        <text class="user-id">{{ userStore.isLogin ? '已登录' : '点击登录' }}</text>
       </view>
     </view>
 

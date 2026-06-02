@@ -20,12 +20,12 @@
 
     <!-- 分类列表 -->
     <view class="category-list">
-      <view v-for="cat in filteredCategories" :key="cat._id" class="category-item">
+      <view v-for="cat in filteredCategories" :key="cat.id" class="category-item">
         <text class="cat-icon">{{ cat.icon }}</text>
         <text class="cat-name">{{ cat.name }}</text>
-        <text v-if="cat.isDefault" class="cat-tag">默认</text>
+        <text v-if="cat.isSystem" class="cat-tag">默认</text>
         <view
-          v-if="!cat.isDefault"
+          v-if="!cat.isSystem"
           class="cat-delete"
           @tap.stop="handleDelete(cat)"
         >
@@ -60,14 +60,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useBillStore } from '@/store/bill'
-import { saveCategory, deleteCategory } from '@/api/category'
 import { useUserStore } from '@/store/user'
+import { addCategory, deleteCategory } from '@/api/category'
 
 const billStore = useBillStore()
-const userStore = useUserStore()
 
 const currentType = ref<'income' | 'expense'>('expense')
 const newName = ref('')
@@ -86,18 +85,13 @@ async function handleAdd() {
     uni.showToast({ title: '请输入图标', icon: 'none' })
     return
   }
-  if (!userStore.userInfo) {
-    uni.showToast({ title: '请先登录', icon: 'none' })
-    return
-  }
 
   try {
-    await saveCategory({
-      userId: userStore.userInfo.userId,
+    await addCategory({
       name: newName.value.trim(),
       icon: newIcon.value.trim(),
       type: currentType.value,
-      sort: filteredCategories.value.length + 1,
+      sortOrder: filteredCategories.value.length + 1,
     })
     uni.showToast({ title: '添加成功', icon: 'success' })
     newName.value = ''
@@ -113,7 +107,7 @@ function handleDelete(cat: any) {
     success: async (res) => {
       if (res.confirm) {
         try {
-          await deleteCategory({ categoryId: cat._id })
+          await deleteCategory({ categoryId: cat.id })
           uni.showToast({ title: '删除成功', icon: 'success' })
           billStore.loadCategories()
         } catch {}
@@ -123,7 +117,17 @@ function handleDelete(cat: any) {
 }
 
 onShow(() => {
-  billStore.loadCategories()
+  const userStore = useUserStore()
+  if (userStore.userInfo) {
+    billStore.loadCategories()
+  } else {
+    const stopWatch = watch(() => userStore.userInfo, (val: any) => {
+      if (val) {
+        billStore.loadCategories()
+        stopWatch()
+      }
+    })
+  }
 })
 </script>
 

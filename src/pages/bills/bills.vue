@@ -39,10 +39,10 @@
       <view class="category-grid">
         <view
           v-for="cat in filteredCategories"
-          :key="cat._id"
+          :key="cat.id"
           class="category-item"
-          :class="{ selected: selectedCategory === cat._id }"
-          @tap="selectedCategory = cat._id"
+          :class="{ selected: selectedCategory === cat.id }"
+          @tap="selectedCategory = cat.id"
         >
           <view class="category-item-inner">
             <text class="category-icon">{{ cat.icon }}</text>
@@ -86,9 +86,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useBillStore } from '@/store/bill'
+import { useUserStore } from '@/store/user'
 import { getToday } from '@/utils/date'
 import CustomTabbar from '@/components/custom-tabbar/custom-tabbar.vue'
 
@@ -153,7 +154,17 @@ async function handleSubmit() {
 }
 
 onShow(() => {
-  billStore.loadCategories()
+  const userStore = useUserStore()
+  if (userStore.userInfo) {
+    billStore.loadCategories()
+  } else {
+    const stopWatch = watch(() => userStore.userInfo, (val: any) => {
+      if (val) {
+        billStore.loadCategories()
+        stopWatch()
+      }
+    })
+  }
 })
 </script>
 

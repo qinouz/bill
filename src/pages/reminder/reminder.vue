@@ -37,7 +37,7 @@
       <view class="btn-auth" @tap="subscribeMessage">
         <text>授权订阅消息</text>
       </view>
-      <view class="btn-test" @tap="testReminder">
+      <view class="btn-test" @tap="testReminderSend">
         <text>测试发送提醒</text>
       </view>
     </view>
@@ -46,14 +46,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useUserStore } from '@/store/user'
+import { saveReminder, testReminder } from '@/api/reminder'
 
-const userStore = useUserStore()
 const isEnabled = ref(false)
 const reminderTime = ref('20:00')
 
 onMounted(() => {
-  // 从本地存储读取设置
   const settings = uni.getStorageSync('reminderSettings')
   if (settings) {
     isEnabled.value = settings.enabled || false
@@ -61,47 +59,33 @@ onMounted(() => {
   }
 })
 
-// 切换提醒开关
 function toggleReminder(e: any) {
   isEnabled.value = e.detail.value
   saveSettings()
 }
 
-// 修改时间
 function onTimeChange(e: any) {
   reminderTime.value = e.detail.value
   saveSettings()
 }
 
-// 保存设置
 async function saveSettings() {
-  // 保存到本地
   uni.setStorageSync('reminderSettings', {
     enabled: isEnabled.value,
     time: reminderTime.value,
   })
 
-  // 保存到云端
-  if (userStore.userInfo) {
-    try {
-      await uni.cloud.callFunction({
-        name: 'updateReminder',
-        data: {
-          userId: userStore.userInfo.userId,
-          enabled: isEnabled.value,
-          time: reminderTime.value,
-        },
-      })
-    } catch (err) {
-      console.error('保存提醒设置失败:', err)
-    }
+  try {
+    await saveReminder({
+      enabled: isEnabled.value,
+      time: reminderTime.value,
+    })
+  } catch (err) {
+    console.error('保存提醒设置失败:', err)
   }
 }
 
-// 订阅消息
 function subscribeMessage() {
-  // 需要在微信公众平台配置订阅消息模板
-  // 这里是示例代码，实际需要替换 templateId
   uni.requestSubscribeMessage({
     tmplIds: ['p7Ef4vKVCJVVimX6W3Cp4OgT8e4Jvmo1hL84SdJBgWI'],
     success: (res) => {
@@ -115,24 +99,11 @@ function subscribeMessage() {
   })
 }
 
-// 测试发送提醒
-async function testReminder() {
-  if (!userStore.userInfo) {
-    uni.showToast({ title: '请先登录', icon: 'none' })
-    return
-  }
-
+async function testReminderSend() {
   try {
     uni.showLoading({ title: '发送中...' })
-    const res = await uni.cloud.callFunction({
-      name: 'sendReminder',
-      data: {
-        manual: true,
-        openid: userStore.userInfo.openid,
-      },
-    })
+    await testReminder()
     uni.hideLoading()
-    console.log('发送结果:', res)
     uni.showToast({ title: '发送成功，请查看微信消息', icon: 'success' })
   } catch (err) {
     uni.hideLoading()

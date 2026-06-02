@@ -38,10 +38,10 @@
         </view>
         <view
           v-for="bill in group.bills"
-          :key="bill._id"
+          :key="bill.id"
           class="bill-item"
         >
-          <view class="bill-left" @tap="goDetail(bill._id)">
+          <view class="bill-left" @tap="goDetail(bill.id)">
             <text class="bill-icon">{{ billStore.getCategoryIcon(bill.categoryId) }}</text>
             <view class="bill-info">
               <text class="bill-category">{{ billStore.getCategoryName(bill.categoryId) }}</text>
@@ -53,7 +53,7 @@
             <text class="bill-amount" :class="bill.type">
               {{ bill.type === 'income' ? '+' : '-' }}{{ bill.amount.toFixed(2) }}
             </text>
-            <view class="delete-btn" @tap="handleDelete(bill._id)">
+            <view class="delete-btn" @tap="handleDelete(bill.id)">
               <text>删除</text>
             </view>
           </view>

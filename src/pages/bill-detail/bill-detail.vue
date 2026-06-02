@@ -42,19 +42,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useBillStore } from '@/store/bill'
+import { useUserStore } from '@/store/user'
 import { getBillDetail, deleteBill as deleteBillApi } from '@/api/bill'
 
 const billStore = useBillStore()
+const userStore = useUserStore()
 const bill = ref<any>(null)
 
 onLoad((options) => {
   if (options?.id) {
     loadDetail(options.id)
   }
-  billStore.loadCategories()
+
+  if (userStore.userInfo) {
+    billStore.loadCategories()
+  } else {
+    const stopWatch = watch(() => userStore.userInfo, (val: any) => {
+      if (val) {
+        billStore.loadCategories()
+        stopWatch()
+      }
+    })
+  }
 })
 
 async function loadDetail(id: string) {
@@ -83,7 +95,7 @@ function handleDelete() {
     success: async (res) => {
       if (res.confirm && bill.value) {
         try {
-          await deleteBillApi({ billId: bill.value._id })
+          await deleteBillApi({ billId: bill.value.id })
           uni.showToast({ title: '已删除', icon: 'success' })
           setTimeout(() => uni.navigateBack(), 1000)
         } catch {}

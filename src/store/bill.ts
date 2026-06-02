@@ -1,32 +1,22 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { getBillList, addBill as addBillApi, addBillBatch, getBillStatistic, type BillItem } from '@/api/bill'
-import { getCategoryList } from '@/api/category'
-import { useUserStore } from './user'
+import { getCategories, type Category } from '@/api/category'
 
 export interface Bill {
-  _id: string
+  id: string
   userId: string
   categoryId: string
   amount: number
   type: 'income' | 'expense'
   remark: string
   billDate: string
-  createTime: string
-  updateTime: string
+  createdAt: string
+  updatedAt: string
   isDeleted: boolean
 }
 
-export interface Category {
-  _id: string
-  userId: string
-  name: string
-  icon: string
-  type: 'income' | 'expense'
-  sort: number
-  isDefault: boolean
-  createTime: string
-}
+export type { Category }
 
 export const useBillStore = defineStore('bill', () => {
   const bills = ref<Bill[]>([])
@@ -39,8 +29,6 @@ export const useBillStore = defineStore('bill', () => {
   const currentMonth = ref('')
 
   async function loadBills(refresh = false) {
-    const userStore = useUserStore()
-    if (!userStore.userInfo) return
     if (loading.value) return
 
     if (refresh) {
@@ -51,7 +39,6 @@ export const useBillStore = defineStore('bill', () => {
     loading.value = true
     try {
       const res = await getBillList({
-        userId: userStore.userInfo.userId,
         pageSize,
         pageNo: pageNo.value,
         month: currentMonth.value || undefined,
@@ -72,11 +59,9 @@ export const useBillStore = defineStore('bill', () => {
     currentMonth.value = month
   }
 
-  async function loadCategories() {
-    const userStore = useUserStore()
-    if (!userStore.userInfo) return
-    const res = await getCategoryList({ userId: userStore.userInfo.userId })
-    categories.value = res.categories
+  async function loadCategories(type?: 'income' | 'expense') {
+    const data = await getCategories(type)
+    categories.value = data
   }
 
   async function addBillRecord(data: BillItem) {
@@ -88,18 +73,16 @@ export const useBillStore = defineStore('bill', () => {
   }
 
   async function loadStatistic(year: number) {
-    const userStore = useUserStore()
-    if (!userStore.userInfo) return null
-    return await getBillStatistic({ userId: userStore.userInfo.userId, year })
+    return await getBillStatistic({ year })
   }
 
   function getCategoryName(categoryId: string) {
-    const cat = categories.value.find((c) => c._id === categoryId)
+    const cat = categories.value.find((c) => c.id === categoryId)
     return cat?.name || '未分类'
   }
 
   function getCategoryIcon(categoryId: string) {
-    const cat = categories.value.find((c) => c._id === categoryId)
+    const cat = categories.value.find((c) => c.id === categoryId)
     return cat?.icon || '📝'
   }
 

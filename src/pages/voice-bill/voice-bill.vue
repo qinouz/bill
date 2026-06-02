@@ -134,7 +134,7 @@
         <scroll-view scroll-y class="picker-list">
           <view
             v-for="cat in currentCategories"
-            :key="cat._id"
+            :key="cat.id"
             class="picker-item"
             @tap="selectCategory(cat)"
           >
@@ -315,7 +315,7 @@ function closeCategoryPicker() {
 // 选择分类
 function selectCategory(cat: any) {
   if (editingIndex.value >= 0) {
-    billItems.value[editingIndex.value].categoryId = cat._id
+    billItems.value[editingIndex.value].categoryId = cat.id
     billItems.value[editingIndex.value].categoryName = cat.name
   }
   closeCategoryPicker()

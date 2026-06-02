@@ -1,16 +1,47 @@
-import { callCloud } from '@/utils/cloud'
+import { request } from '@/utils/request'
 
 export interface LoginResult {
-  openid: string
+  token: string
   userId: string
-  nickName: string
+  nickname: string
   avatarUrl: string
 }
 
-export function login() {
-  return callCloud<LoginResult>('login')
+// 登录：uni.login 获取 code，然后调用后端
+export function login(): Promise<LoginResult> {
+  return new Promise((resolve, reject) => {
+    uni.login({
+      provider: 'weixin',
+      success: async ({ code }) => {
+        try {
+          const data = await request<LoginResult>({
+            url: '/auth/login',
+            method: 'POST',
+            data: { code },
+          })
+
+          // 存储 token 和用户信息
+          uni.setStorageSync('token', data.token)
+          uni.setStorageSync('userInfo', {
+            userId: data.userId,
+            nickname: data.nickname,
+            avatarUrl: data.avatarUrl,
+          })
+
+          resolve(data)
+        } catch (err) {
+          reject(err)
+        }
+      },
+      fail: reject,
+    })
+  })
 }
 
-export function getUserStats(data: { userId: string }) {
-  return callCloud<{ consecutiveDays: number; recordDays: number; billCount: number }>('getUserStats', data)
+// 获取用户统计（无需传 userId，后端从 JWT 解析）
+export function getUserStats() {
+  return request<{ consecutiveDays: number; recordDays: number; billCount: number }>({
+    url: '/users/stats',
+    method: 'GET',
+  })
 }

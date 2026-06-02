@@ -3,12 +3,6 @@ import { onLaunch } from '@dcloudio/uni-app'
 import { useUserStore } from './store/user'
 
 onLaunch(() => {
-  // 初始化云开发
-  uni.cloud.init({
-    env: 'cloud1-5gwq4xl683cb3b9a',
-    traceUser: true,
-  })
-
   // 自动登录
   const userStore = useUserStore()
   userStore.autoLogin()

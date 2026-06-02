@@ -51,18 +51,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { useBillStore } from '@/store/bill'
+import { getBillStatistic } from '@/api/bill'
+import { useUserStore } from '@/store/user'
 import CustomTabbar from '@/components/custom-tabbar/custom-tabbar.vue'
 
-const billStore = useBillStore()
+const userStore = useUserStore()
 const selectedYear = ref(new Date().getFullYear())
 
 const yearIncome = ref('0.00')
 const yearExpense = ref('0.00')
 const yearBalance = ref('0.00')
-const monthlyData = ref<{ month: number; income: string; expense: string }[]>([])
+const monthlyData = ref<{ month: string; income: string; expense: string }[]>([])
 
 function changeYear(delta: number) {
   selectedYear.value += delta
@@ -71,17 +72,23 @@ function changeYear(delta: number) {
 
 async function loadStatistic() {
   try {
-    const data = await billStore.loadStatistic(selectedYear.value)
+    const data = await getBillStatistic({ year: selectedYear.value })
     if (data) {
-      yearIncome.value = data.income.toFixed(2)
-      yearExpense.value = data.expense.toFixed(2)
-      yearBalance.value = data.balance.toFixed(2)
-      // 构造月度数据
+      yearIncome.value = (data.income || 0).toFixed(2)
+      yearExpense.value = (data.expense || 0).toFixed(2)
+      yearBalance.value = (data.balance || 0).toFixed(2)
+
+      // 构造月度数据，key 是 "01" 到 "12"
       const monthly = data.monthly || {}
       const result = []
       for (let i = 1; i <= 12; i++) {
-        const m = monthly[String(i)] || { income: 0, expense: 0 }
-        result.push({ month: i, income: m.income.toFixed(2), expense: m.expense.toFixed(2) })
+        const month = String(i).padStart(2, '0')
+        const item = monthly[month] || { income: 0, expense: 0 }
+        result.push({
+          month,
+          income: Number(item.income || 0).toFixed(2),
+          expense: Number(item.expense || 0).toFixed(2),
+        })
       }
       monthlyData.value = result
     }
@@ -89,7 +96,16 @@ async function loadStatistic() {
 }
 
 onShow(() => {
-  loadStatistic()
+  if (userStore.userInfo) {
+    loadStatistic()
+  } else {
+    const stopWatch = watch(() => userStore.userInfo, (val: any) => {
+      if (val) {
+        loadStatistic()
+        stopWatch()
+      }
+    })
+  }
 })
 </script>
 

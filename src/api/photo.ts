@@ -1,25 +1,44 @@
-import { callCloud } from '@/utils/cloud'
 import type { VoiceItem } from './voice'
 
 export interface PhotoParseResult {
   items: VoiceItem[]
 }
 
-// 上传图片到云存储并识别
-export async function recognizePhoto(filePath: string): Promise<PhotoParseResult> {
-  // 1. 上传到云存储
-  const ext = filePath.split('.').pop() || 'jpg'
-  const cloudPath = `photo/${Date.now()}.${ext}`
+// 上传图片并识别
+export function recognizePhoto(filePath: string): Promise<PhotoParseResult> {
+  const token = uni.getStorageSync('token')
 
-  const uploadRes = await uni.cloud.uploadFile({
-    cloudPath,
-    filePath,
+  return new Promise((resolve, reject) => {
+    uni.uploadFile({
+      url: 'http://localhost:8721/api/photo/recognize',
+      filePath,
+      name: 'file',
+      header: {
+        Authorization: `Bearer ${token}`,
+      },
+      success: (res) => {
+        const body = JSON.parse(res.data || '{}')
+
+        if (body.code === 0) {
+          resolve(body.data)
+          return
+        }
+
+        if (body.code === 401) {
+          uni.removeStorageSync('token')
+          uni.removeStorageSync('userInfo')
+          uni.reLaunch({ url: '/pages/index/index' })
+          reject(new Error('Unauthorized'))
+          return
+        }
+
+        uni.showToast({
+          title: body.message || '图片识别失败',
+          icon: 'none',
+        })
+        reject(new Error(body.message || '图片识别失败'))
+      },
+      fail: reject,
+    })
   })
-
-  // 2. 调用识别云函数（传文件ID）
-  const result = await callCloud<PhotoParseResult>('photoRecognize', {
-    fileID: uploadRes.fileID,
-  })
-
-  return result
 }
