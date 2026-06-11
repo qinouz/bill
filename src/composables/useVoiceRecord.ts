@@ -2,12 +2,13 @@ import { ref } from 'vue'
 
 export function useVoiceRecord() {
   const isRecording = ref(false)
+  const isStarting = ref(false)
   let resultCallback: ((tempFilePath: string) => void) | null = null
   let errorCallback: ((errMsg: string) => void) | null = null
   let recorderManager: UniApp.RecorderManager | null = null
   let isInitialized = false
-  let isCancelled = false  // 标记是否是取消操作
-  let isStarting = false   // 标记录音是否正在启动中
+  let isCancelled = false
+  let shouldStopAfterStart = false
 
   function getRecorder() {
     if (!recorderManager) {
@@ -23,51 +24,63 @@ export function useVoiceRecord() {
     const recorder = getRecorder()
 
     recorder.onStart(() => {
-      isStarting = false
-      // 如果在启动过程中被取消，立即停止
+      isStarting.value = false
+
       if (isCancelled) {
         recorder.stop()
         return
       }
+
       isRecording.value = true
+
+      if (shouldStopAfterStart) {
+        shouldStopAfterStart = false
+        recorder.stop()
+      }
     })
 
     recorder.onStop((res) => {
       isRecording.value = false
-      isStarting = false
-      // 如果是取消操作，不触发 resultCallback
+      isStarting.value = false
+      shouldStopAfterStart = false
+
       if (isCancelled) {
         isCancelled = false
         return
       }
+
       if (res.tempFilePath) {
-        if (resultCallback) {
-          resultCallback(res.tempFilePath)
-        }
-      } else {
-        uni.showToast({ title: '录音失败', icon: 'none' })
-        if (errorCallback) errorCallback('录音失败')
+        resultCallback?.(res.tempFilePath)
+        return
       }
+
+      const errMsg = '录音失败'
+      uni.showToast({ title: errMsg, icon: 'none' })
+      errorCallback?.(errMsg)
     })
 
     recorder.onError((res) => {
       isRecording.value = false
-      isStarting = false
+      isStarting.value = false
       isCancelled = false
-      console.error('录音错误:', res)
+      shouldStopAfterStart = false
+
       const errMsg = res.errMsg || '未知错误'
+      console.error('录音错误:', res)
       uni.showToast({ title: '录音失败: ' + errMsg, icon: 'none' })
-      if (errorCallback) errorCallback(errMsg)
+      errorCallback?.(errMsg)
     })
   }
 
   function startRecord() {
-    initRecorder()
-    isStarting = true
-    isCancelled = false
+    if (isRecording.value || isStarting.value) return
 
-    const recorder = getRecorder()
-    recorder.start({
+    initRecorder()
+    isStarting.value = true
+    isCancelled = false
+    shouldStopAfterStart = false
+
+    getRecorder().start({
       duration: 60000,
       sampleRate: 16000,
       numberOfChannels: 1,
@@ -77,24 +90,27 @@ export function useVoiceRecord() {
   }
 
   function stopRecord() {
-    const recorder = getRecorder()
+    if (isStarting.value) {
+      shouldStopAfterStart = true
+      return
+    }
+
     if (isRecording.value) {
-      recorder.stop()
+      getRecorder().stop()
     }
   }
 
   function cancelRecord() {
-    isCancelled = true  // 标记为取消
+    isCancelled = true
+    shouldStopAfterStart = false
     isRecording.value = false
-    // 如果还在启动中，不调用 stop，等 onStart 回调处理
-    if (isStarting) {
-      return
-    }
-    const recorder = getRecorder()
+
+    if (isStarting.value) return
+
     try {
-      recorder.stop()
-    } catch (e) {
-      // ignore
+      getRecorder().stop()
+    } catch {
+      isCancelled = false
     }
   }
 
@@ -108,6 +124,7 @@ export function useVoiceRecord() {
 
   return {
     isRecording,
+    isStarting,
     startRecord,
     stopRecord,
     cancelRecord,

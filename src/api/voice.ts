@@ -15,9 +15,6 @@ export interface VoiceParseResult {
   items: VoiceItem[]
 }
 
-// 上传音频并识别
-export async function recognizeVoice(tempFilePath: string): Promise<VoiceParseResult> {
-  // 上传文件到后端，后端处理识别
-  const result = await uploadFile<VoiceParseResult>(tempFilePath, '/api/voice/recognize')
-  return result
+export function recognizeVoice(tempFilePath: string): Promise<VoiceParseResult> {
+  return uploadFile<VoiceParseResult>(tempFilePath, '/voice/recognize')
 }

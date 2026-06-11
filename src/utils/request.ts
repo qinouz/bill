@@ -6,12 +6,25 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
 }
 
+function buildUrl(path: string) {
+  const base = BASE_URL.replace(/\/$/, '')
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return base + normalizedPath
+}
+
+function handleUnauthorized() {
+  uni.removeStorageSync('token')
+  uni.removeStorageSync('userInfo')
+  uni.showToast({ title: '登录已过期', icon: 'none' })
+  uni.reLaunch({ url: '/pages/index/index' })
+}
+
 export function request<T = any>(options: RequestOptions): Promise<T> {
   const token = uni.getStorageSync('token')
 
   return new Promise((resolve, reject) => {
     uni.request({
-      url: BASE_URL + options.url,
+      url: buildUrl(options.url),
       method: options.method || 'GET',
       data: options.data || {},
       header: {
@@ -27,10 +40,7 @@ export function request<T = any>(options: RequestOptions): Promise<T> {
         }
 
         if (body.code === 401) {
-          uni.removeStorageSync('token')
-          uni.removeStorageSync('userInfo')
-          uni.showToast({ title: '登录已过期', icon: 'none' })
-          uni.reLaunch({ url: '/pages/index/index' })
+          handleUnauthorized()
           reject(new Error('Unauthorized'))
           return
         }
@@ -43,23 +53,35 @@ export function request<T = any>(options: RequestOptions): Promise<T> {
   })
 }
 
-// 文件上传
 export function uploadFile<T = any>(filePath: string, url: string): Promise<T> {
   const token = uni.getStorageSync('token')
 
   return new Promise((resolve, reject) => {
     uni.uploadFile({
-      url: BASE_URL + url,
+      url: buildUrl(url),
       filePath,
       name: 'file',
       header: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       success: (res: any) => {
-        const body = JSON.parse(res.data)
+        let body: any
+        try {
+          body = typeof res.data === 'string' ? JSON.parse(res.data || '{}') : (res.data || {})
+        } catch {
+          uni.showToast({ title: '上传返回格式错误', icon: 'none' })
+          reject(new Error('上传返回格式错误'))
+          return
+        }
 
         if (body.code === 0) {
           resolve(body.data)
+          return
+        }
+
+        if (body.code === 401) {
+          handleUnauthorized()
+          reject(new Error('Unauthorized'))
           return
         }
 

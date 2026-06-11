@@ -1,18 +1,14 @@
 <template>
   <view class="page">
-    <!-- 顶部提示 -->
     <view class="tip-area">
-      <text class="tip-text">说出你的账单，例如"午饭35块，打车20"</text>
+      <text class="tip-text">说出你的账单，例如“午饭35块，打车20”</text>
     </view>
 
-    <!-- 录音区域 -->
     <view class="record-area">
-      <!-- 状态提示 -->
       <view v-if="statusText" class="status-text">
         <text>{{ statusText }}</text>
       </view>
 
-      <!-- 录音按钮 -->
       <view
         class="record-btn"
         :class="{ recording: isRecording, processing: isProcessing }"
@@ -20,20 +16,18 @@
         @touchend="onVoiceEnd"
         @touchcancel="onVoiceCancel"
       >
-        <text class="record-icon">{{ isRecording ? '🔴' : '🎤' }}</text>
+        <text class="record-icon">{{ isRecording ? '●' : '🎤' }}</text>
         <text class="record-label">
           {{ isProcessing ? '识别中...' : (isRecording ? '松开结束' : '长按说话') }}
         </text>
       </view>
     </view>
 
-    <!-- 识别文字 -->
     <view v-if="recognizedText" class="recognized-text">
       <text class="text-label">识别内容：</text>
       <text class="text-content">{{ recognizedText }}</text>
     </view>
 
-    <!-- 账单列表 -->
     <view v-if="billItems.length > 0" class="bill-list" id="billList">
       <view class="list-header">
         <text class="list-title">识别到 {{ billItems.length }} 条账单</text>
@@ -47,12 +41,10 @@
         :key="index"
         class="bill-card"
       >
-        <!-- 删除按钮 -->
         <view class="card-delete" @tap="handleDeleteItem(index)">
           <text>×</text>
         </view>
 
-        <!-- 类型切换 -->
         <view class="card-type">
           <view
             class="type-tag"
@@ -66,7 +58,6 @@
           </view>
         </view>
 
-        <!-- 金额 -->
         <view class="card-row">
           <text class="row-label">金额</text>
           <input
@@ -78,18 +69,16 @@
           />
         </view>
 
-        <!-- 分类 -->
         <view class="card-row" @tap="openCategoryPicker(index)">
           <text class="row-label">分类</text>
           <view class="category-value">
-            <text class="row-value" :class="{ empty: !item.categoryName }">
+            <text class="row-value" :class="{ empty: !item.categoryId }">
               {{ item.categoryName || '点击选择分类' }}
             </text>
             <text class="category-arrow">›</text>
           </view>
         </view>
 
-        <!-- 日期 -->
         <view class="card-row">
           <text class="row-label">日期</text>
           <picker mode="date" :value="item.billDate" @change="onDateChange($event, index)">
@@ -97,7 +86,6 @@
           </picker>
         </view>
 
-        <!-- 备注 -->
         <view class="card-row">
           <text class="row-label">备注</text>
           <input
@@ -109,7 +97,6 @@
         </view>
       </view>
 
-      <!-- 操作按钮 -->
       <view class="btn-group">
         <view class="btn btn-retry" @tap="handleRetry">
           <text>重新录入</text>
@@ -124,7 +111,6 @@
       </view>
     </view>
 
-    <!-- 分类选择弹窗 -->
     <view v-if="showCategoryPicker" class="picker-mask" @tap="closeCategoryPicker">
       <view class="picker-popup" @tap.stop>
         <view class="picker-header">
@@ -149,25 +135,19 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
+import { onUnload } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
 import { useBillStore } from '@/store/bill'
 import { useVoiceRecord } from '@/composables/useVoiceRecord'
 import { recognizeVoice } from '@/api/voice'
 import type { VoiceItem } from '@/api/voice'
 
-import { onUnload } from '@dcloudio/uni-app'
+type Confidence = VoiceItem['confidence']
 
 const userStore = useUserStore()
 const billStore = useBillStore()
+const { isRecording, isStarting, startRecord, stopRecord, cancelRecord, onResult, onError } = useVoiceRecord()
 
-const { isRecording, startRecord, stopRecord, cancelRecord, onResult, onError } = useVoiceRecord()
-
-// 页面卸载时停止录音
-onUnload(() => {
-  if (isRecording.value) {
-    cancelRecord()
-  }
-})
 const isProcessing = ref(false)
 const recognizedText = ref('')
 const billItems = ref<VoiceItem[]>([])
@@ -177,69 +157,80 @@ const editingIndex = ref(-1)
 let longPressTimer: ReturnType<typeof setTimeout> | null = null
 let isLongPress = false
 
-// 当前编辑项的分类列表
 const currentCategories = computed(() => {
   if (editingIndex.value < 0) return []
   const item = billItems.value[editingIndex.value]
   const type = item?.type || 'expense'
-  return billStore.categories.filter((c: any) => c.type === type)
+  return billStore.categories.filter((c) => c.type === type)
 })
 
-// 状态文本
 const statusText = computed(() => {
   if (isProcessing.value) return '正在识别，请稍候...'
-  if (isRecording.value) return '正在录音...'
+  if (isRecording.value || isStarting.value) return '正在录音...'
   if (billItems.value.length > 0) return ''
   return '长按按钮开始录音'
 })
 
-// 有效记录数（有金额和分类）
 const validCount = computed(() => {
-  return billItems.value.filter((item: any) => item.amount && item.categoryId).length
+  return billItems.value.filter((item) => isValidBillItem(item)).length
 })
 
-// 是否可确认
-const canConfirm = computed(() => {
-  return validCount.value > 0
+const canConfirm = computed(() => validCount.value > 0 && !isProcessing.value)
+
+onUnload(() => {
+  clearLongPressTimer()
+  if (isRecording.value || isStarting.value) {
+    cancelRecord()
+  }
 })
 
-// 录音完成回调
 onResult(async (tempFilePath: string) => {
-  if (!userStore.userInfo) return
+  const token = uni.getStorageSync('token')
+  if (!userStore.userInfo || !token) {
+    uni.showToast({ title: '请先登录后再使用语音记账', icon: 'none' })
+    return
+  }
 
   isProcessing.value = true
   uni.showLoading({ title: 'AI识别中，约需3-10秒...', mask: true })
+
   try {
     const result = await recognizeVoice(tempFilePath)
     recognizedText.value = result.recognizedText || ''
-    billItems.value = result.items || []
-    // 等待 DOM 更新后再隐藏 loading
+    billItems.value = normalizeVoiceItems(result.items)
+
+    if (billItems.value.length === 0) {
+      uni.showToast({ title: '未识别到账单', icon: 'none' })
+    }
+
     await nextTick()
-    // 滚动到列表位置
     if (billItems.value.length > 0) {
       uni.pageScrollTo({ selector: '#billList', duration: 300 })
     }
-  } catch {
-    // error handled by callCloud
+  } catch (err: any) {
+    console.error('语音识别失败:', err)
   } finally {
     uni.hideLoading()
     isProcessing.value = false
   }
 })
 
-// 录音错误回调
 onError(() => {
   uni.hideLoading()
   isProcessing.value = false
 })
 
 function onVoiceStart() {
-  isLongPress = false
-  billItems.value = []
+  if (isProcessing.value) return
 
-  // 延迟 300ms 后才认为是长按，开始录音
+  isLongPress = false
+  clearLongPressTimer()
+
   longPressTimer = setTimeout(() => {
     isLongPress = true
+    recognizedText.value = ''
+    billItems.value = []
+
     uni.authorize({
       scope: 'scope.record',
       success: () => {
@@ -247,13 +238,20 @@ function onVoiceStart() {
         startRecord()
       },
       fail: () => {
+        resetPendingRecord()
         uni.showModal({
           title: '权限提示',
           content: '需要录音权限才能使用语音记账，请在设置中授权',
           confirmText: '去设置',
           success: (res) => {
             if (res.confirm) {
-              uni.openSetting()
+              uni.openSetting({
+                success: (settingRes) => {
+                  if (settingRes.authSetting?.['scope.record']) {
+                    uni.showToast({ title: '授权成功，请重新长按录音', icon: 'none' })
+                  }
+                },
+              })
             }
           },
         })
@@ -263,21 +261,9 @@ function onVoiceStart() {
 }
 
 function onVoiceEnd() {
-  // 清除长按定时器
-  if (longPressTimer) {
-    clearTimeout(longPressTimer)
-    longPressTimer = null
-  }
+  clearLongPressTimer()
 
-  // 如果不是长按（按住时间太短），直接返回
-  if (!isLongPress) {
-    return
-  }
-
-  // 如果还没开始录音（授权中），直接取消
-  if (!isRecording.value) {
-    return
-  }
+  if (!isLongPress) return
 
   const duration = Date.now() - recordStartTime.value
   if (duration < 1000) {
@@ -285,11 +271,12 @@ function onVoiceEnd() {
     cancelRecord()
     return
   }
-  uni.showLoading({ title: 'AI识别中...' })
+
   stopRecord()
 }
 
 function onVoiceCancel() {
+  clearLongPressTimer()
   uni.hideLoading()
   cancelRecord()
 }
@@ -299,50 +286,49 @@ function handleRetry() {
   billItems.value = []
 }
 
-// 打开分类选择器
 function openCategoryPicker(index: number) {
   editingIndex.value = index
-  billStore.loadCategories()
+  const type = billItems.value[index]?.type || 'expense'
+  billStore.loadCategories(type).catch(() => {})
   showCategoryPicker.value = true
 }
 
-// 关闭分类选择器
 function closeCategoryPicker() {
   showCategoryPicker.value = false
   editingIndex.value = -1
 }
 
-// 选择分类
 function selectCategory(cat: any) {
   if (editingIndex.value >= 0) {
     billItems.value[editingIndex.value].categoryId = cat.id
     billItems.value[editingIndex.value].categoryName = cat.name
+    billItems.value[editingIndex.value].confidence = getConfidence(billItems.value[editingIndex.value])
   }
   closeCategoryPicker()
 }
 
-// 金额变化
 function onAmountChange(e: any, index: number) {
   const val = parseFloat(e.detail.value)
-  billItems.value[index].amount = isNaN(val) ? null : val
+  billItems.value[index].amount = Number.isFinite(val) ? val : null
+  billItems.value[index].confidence = getConfidence(billItems.value[index])
 }
 
-// 日期变化
 function onDateChange(e: any, index: number) {
   billItems.value[index].billDate = e.detail.value
 }
 
-// 备注变化
 function onRemarkChange(e: any, index: number) {
   billItems.value[index].remark = e.detail.value
 }
 
-// 切换收支类型
 function toggleType(index: number) {
-  billItems.value[index].type = billItems.value[index].type === 'income' ? 'expense' : 'income'
+  const item = billItems.value[index]
+  item.type = item.type === 'income' ? 'expense' : 'income'
+  item.categoryId = null
+  item.categoryName = null
+  item.confidence = getConfidence(item)
 }
 
-// 新增一条
 function handleAddItem() {
   billItems.value.push({
     amount: null,
@@ -350,51 +336,125 @@ function handleAddItem() {
     categoryName: null,
     type: 'expense',
     remark: '',
-    billDate: new Date().toISOString().split('T')[0],
+    billDate: getToday(),
     confidence: 'low',
   })
 }
 
-// 删除一条
 function handleDeleteItem(index: number) {
   billItems.value.splice(index, 1)
 }
 
-// 置信度文本
 function getConfidenceText(confidence: string) {
   switch (confidence) {
     case 'high': return '准确'
     case 'medium': return '核对'
     case 'low': return '补充'
-    default: return ''
+    default: return '补充'
   }
 }
 
-// 确认记账
 async function handleConfirm() {
   if (!canConfirm.value) return
 
-  // 只保存有效的记录
-  const validItems = billItems.value.filter((item: any) => item.amount && item.categoryId)
+  const validItems = billItems.value
+    .filter((item) => isValidBillItem(item))
+    .map((item) => ({
+      categoryId: item.categoryId!,
+      amount: Number(item.amount),
+      type: item.type,
+      remark: item.remark || '',
+      billDate: item.billDate || getToday(),
+    }))
 
   if (validItems.length === 0) return
 
   uni.showLoading({ title: '保存中...' })
 
   try {
-    const result = await billStore.addBillRecords(validItems as any[])
+    const result = await billStore.addBillRecords(validItems)
     uni.hideLoading()
     uni.showToast({ title: `成功保存${result.count}条`, icon: 'success' })
-  } catch {
+  } catch (err: any) {
     uni.hideLoading()
-    uni.showToast({ title: '保存失败', icon: 'none' })
+    uni.showToast({ title: err.message || '保存失败', icon: 'none' })
     return
   }
 
-  // 延迟返回，让用户看到提示
   setTimeout(() => {
     uni.navigateBack()
-  }, 1500)
+  }, 1200)
+}
+
+function normalizeVoiceItems(items: any): VoiceItem[] {
+  const list = Array.isArray(items) ? items : []
+  return list.map((item) => {
+    const amount = parseAmount(item.amount)
+    const categoryId = item.categoryId || item.category_id || null
+    const categoryName = item.categoryName || item.category || null
+    const normalized: VoiceItem = {
+      amount,
+      categoryId,
+      categoryName,
+      type: item.type === 'income' ? 'income' : 'expense',
+      remark: item.remark || '',
+      billDate: normalizeDate(item.billDate || item.date),
+      confidence: normalizeConfidence(item.confidence),
+    }
+    normalized.confidence = normalized.confidence || getConfidence(normalized)
+    return normalized
+  })
+}
+
+function parseAmount(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string') {
+    const amount = parseFloat(value)
+    return Number.isFinite(amount) ? amount : null
+  }
+  return null
+}
+
+function normalizeDate(value: unknown) {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value
+  }
+  return getToday()
+}
+
+function normalizeConfidence(value: unknown): Confidence | '' {
+  return value === 'high' || value === 'medium' || value === 'low' ? value : ''
+}
+
+function getConfidence(item: VoiceItem): Confidence {
+  if (item.amount && item.categoryId) return 'high'
+  if (item.amount || item.categoryId) return 'medium'
+  return 'low'
+}
+
+function isValidBillItem(item: VoiceItem) {
+  return Number(item.amount) > 0 && !!item.categoryId
+}
+
+function getToday() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function clearLongPressTimer() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+function resetPendingRecord() {
+  clearLongPressTimer()
+  isLongPress = false
+  recordStartTime.value = 0
 }
 </script>
 
@@ -482,6 +542,11 @@ async function handleConfirm() {
 
 .record-icon {
   font-size: 48rpx;
+  color: #667eea;
+}
+
+.recording .record-icon {
+  color: #fff;
 }
 
 .record-label {
@@ -672,7 +737,6 @@ async function handleConfirm() {
   color: #ccc;
 }
 
-/* 分类选择弹窗 */
 .picker-mask {
   position: fixed;
   top: 0;
