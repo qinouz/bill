@@ -231,33 +231,54 @@ function onVoiceStart() {
     recognizedText.value = ''
     billItems.value = []
 
-    uni.authorize({
-      scope: 'scope.record',
-      success: () => {
+    ensureRecordPermissionThenStart()
+  }, 300)
+}
+
+function ensureRecordPermissionThenStart() {
+  uni.getSetting({
+    success: (settingRes) => {
+      if (settingRes.authSetting?.['scope.record']) {
         recordStartTime.value = Date.now()
         startRecord()
-      },
-      fail: () => {
-        resetPendingRecord()
-        uni.showModal({
-          title: '权限提示',
-          content: '需要录音权限才能使用语音记账，请在设置中授权',
-          confirmText: '去设置',
-          success: (res) => {
-            if (res.confirm) {
-              uni.openSetting({
-                success: (settingRes) => {
-                  if (settingRes.authSetting?.['scope.record']) {
-                    uni.showToast({ title: '授权成功，请重新长按录音', icon: 'none' })
-                  }
-                },
-              })
-            }
-          },
-        })
-      },
-    })
-  }, 300)
+        return
+      }
+
+      requestRecordPermissionOnly()
+    },
+    fail: () => {
+      requestRecordPermissionOnly()
+    },
+  })
+}
+
+function requestRecordPermissionOnly() {
+  resetPendingRecord()
+
+  uni.authorize({
+    scope: 'scope.record',
+    success: () => {
+      uni.showToast({ title: '授权成功，请重新长按录音', icon: 'none' })
+    },
+    fail: () => {
+      uni.showModal({
+        title: '权限提示',
+        content: '需要录音权限才能使用语音记账，请在设置中授权',
+        confirmText: '去设置',
+        success: (res) => {
+          if (res.confirm) {
+            uni.openSetting({
+              success: (settingRes) => {
+                if (settingRes.authSetting?.['scope.record']) {
+                  uni.showToast({ title: '授权成功，请重新长按录音', icon: 'none' })
+                }
+              },
+            })
+          }
+        },
+      })
+    },
+  })
 }
 
 function onVoiceEnd() {
