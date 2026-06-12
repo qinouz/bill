@@ -209,6 +209,8 @@ onResult(async (tempFilePath: string) => {
     }
   } catch (err: any) {
     console.error('语音识别失败:', err)
+    uni.hideLoading()
+    uni.showToast({ title: err?.message || '语音识别失败', icon: 'none' })
   } finally {
     uni.hideLoading()
     isProcessing.value = false

@@ -19,6 +19,10 @@ function handleUnauthorized() {
   uni.reLaunch({ url: '/pages/index/index' })
 }
 
+function getErrorMessage(err: any, fallback: string) {
+  return err?.errMsg || err?.message || fallback
+}
+
 export function request<T = any>(options: RequestOptions): Promise<T> {
   const token = uni.getStorageSync('token')
 
@@ -45,10 +49,15 @@ export function request<T = any>(options: RequestOptions): Promise<T> {
           return
         }
 
-        uni.showToast({ title: body.message || '请求失败', icon: 'none' })
-        reject(new Error(body.message || '请求失败'))
+        const message = body.message || '请求失败'
+        uni.showToast({ title: message, icon: 'none' })
+        reject(new Error(message))
       },
-      fail: reject,
+      fail: (err) => {
+        const message = getErrorMessage(err, '网络请求失败')
+        uni.showToast({ title: message, icon: 'none' })
+        reject(new Error(message))
+      },
     })
   })
 }
@@ -69,8 +78,9 @@ export function uploadFile<T = any>(filePath: string, url: string): Promise<T> {
         try {
           body = typeof res.data === 'string' ? JSON.parse(res.data || '{}') : (res.data || {})
         } catch {
-          uni.showToast({ title: '上传返回格式错误', icon: 'none' })
-          reject(new Error('上传返回格式错误'))
+          const message = '上传返回格式错误'
+          uni.showToast({ title: message, icon: 'none' })
+          reject(new Error(message))
           return
         }
 
@@ -85,10 +95,15 @@ export function uploadFile<T = any>(filePath: string, url: string): Promise<T> {
           return
         }
 
-        uni.showToast({ title: body.message || '上传失败', icon: 'none' })
-        reject(new Error(body.message || '上传失败'))
+        const message = body.message || '上传失败'
+        uni.showToast({ title: message, icon: 'none' })
+        reject(new Error(message))
       },
-      fail: reject,
+      fail: (err) => {
+        const message = getErrorMessage(err, '上传失败，请检查网络或域名配置')
+        uni.showToast({ title: message, icon: 'none' })
+        reject(new Error(message))
+      },
     })
   })
 }
