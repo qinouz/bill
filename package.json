@@ -4,7 +4,8 @@
   "description": "家庭记账微信小程序",
   "scripts": {
     "dev:mp-weixin": "uni -p mp-weixin",
-    "build:mp-weixin": "uni build -p mp-weixin",
+    "build": "uni build -p mp-weixin && node scripts/sync-mp-build-to-dev.js",
+    "build:mp-weixin": "uni build -p mp-weixin && node scripts/sync-mp-build-to-dev.js",
     "dev:h5": "uni",
     "build:h5": "uni build"
   },
