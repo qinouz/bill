@@ -4,7 +4,7 @@
       <!-- 金额 -->
       <view class="amount-area">
         <text class="amount" :class="bill.type">
-          {{ bill.type === 'income' ? '+' : '-' }}{{ bill.amount.toFixed(2) }}
+          {{ bill.type === 'income' ? '+' : '-' }}{{ formatMoneyFromCents(bill.amountCents) }}
         </text>
         <text class="type-label">{{ bill.type === 'income' ? '收入' : '支出' }}</text>
       </view>
@@ -25,7 +25,7 @@
         </view>
         <view class="info-item">
           <text class="info-label">创建时间</text>
-          <text class="info-value">{{ formatDateTime(bill.createTime) }}</text>
+          <text class="info-value">{{ formatDateTime(bill.createdAt) }}</text>
         </view>
       </view>
 
@@ -46,11 +46,12 @@ import { ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useBillStore } from '@/store/bill'
 import { useUserStore } from '@/store/user'
-import { getBillDetail, deleteBill as deleteBillApi } from '@/api/bill'
+import { getBillDetail, deleteBill as deleteBillApi, type Bill } from '@/api/bill'
+import { formatMoneyFromCents } from '@/utils/amount'
 
 const billStore = useBillStore()
 const userStore = useUserStore()
-const bill = ref<any>(null)
+const bill = ref<Bill | null>(null)
 
 onLoad((options) => {
   if (options?.id) {
@@ -77,9 +78,9 @@ async function loadDetail(id: string) {
   }
 }
 
-function formatDateTime(dateStr: string) {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
+function formatDateTime(timestamp: number) {
+  if (!Number.isFinite(timestamp)) return ''
+  const date = new Date(timestamp)
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
@@ -95,7 +96,10 @@ function handleDelete() {
     success: async (res) => {
       if (res.confirm && bill.value) {
         try {
-          await deleteBillApi({ billId: bill.value.id })
+          const billId = bill.value.id
+          await deleteBillApi({ billId })
+          billStore.removeBillRecord(billId)
+          uni.$emit('billDeleted', { billId })
           uni.showToast({ title: '已删除', icon: 'success' })
           setTimeout(() => uni.navigateBack(), 1000)
         } catch {}

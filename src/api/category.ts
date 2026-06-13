@@ -8,7 +8,7 @@ export interface Category {
   type: 'income' | 'expense'
   sortOrder: number
   isSystem: boolean
-  createdAt: string
+  createdAt: number
 }
 
 // 查询分类列表

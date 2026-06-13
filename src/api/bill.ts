@@ -2,23 +2,53 @@ import { request } from '@/utils/request'
 
 export interface BillItem {
   categoryId: string
-  amount: number
+  amountCents: number
   type: 'income' | 'expense'
   remark?: string
   billDate: string
 }
 
-// 获取账单列表（无需传 userId）
+export interface Bill extends BillItem {
+  id: string
+  userId?: string
+  categoryName?: string
+  categoryIcon?: string
+  createdAt: number
+  updatedAt: number
+  isDeleted?: boolean
+}
+
+export interface BillStatistic {
+  year: number
+  incomeCents: number
+  expenseCents: number
+  balanceCents: number
+  monthly: Record<string, { incomeCents: number; expenseCents: number }>
+}
+
+export interface BillListSummary {
+  incomeCents: number
+  expenseCents: number
+  balanceCents: number
+}
+
+export interface BillListResult {
+  bills: Bill[]
+  total: number
+  pageNo: number
+  pageSize: number
+  summary?: BillListSummary
+}
+
 export function getBillList(data: { pageSize: number; pageNo: number; month?: string }) {
-  return request<{ bills: any[]; total: number }>({
+  return request<BillListResult>({
     url: '/bills',
     method: 'GET',
     data,
   })
 }
 
-// 单条添加
-export function addBill(data: Omit<BillItem, 'userId'>) {
+export function addBill(data: BillItem) {
   return request<{ billId: string }>({
     url: '/bills',
     method: 'POST',
@@ -26,8 +56,7 @@ export function addBill(data: Omit<BillItem, 'userId'>) {
   })
 }
 
-// 批量添加
-export function addBillBatch(items: Omit<BillItem, 'userId'>[]) {
+export function addBillBatch(items: BillItem[]) {
   return request<{ billIds: string[]; count: number }>({
     url: '/bills/batch',
     method: 'POST',
@@ -38,7 +67,7 @@ export function addBillBatch(items: Omit<BillItem, 'userId'>[]) {
 export function editBill(data: {
   billId: string
   categoryId?: string
-  amount?: number
+  amountCents?: number
   remark?: string
   billDate?: string
 }) {
@@ -57,21 +86,14 @@ export function deleteBill(data: { billId: string }) {
 }
 
 export function getBillDetail(data: { billId: string }) {
-  return request<any>({
+  return request<Bill>({
     url: `/bills/${data.billId}`,
     method: 'GET',
   })
 }
 
-// 获取统计数据（无需传 userId）
 export function getBillStatistic(data: { year: number }) {
-  return request<{
-    year: number
-    income: number
-    expense: number
-    balance: number
-    monthly: Record<string, { income: number; expense: number }>
-  }>({
+  return request<BillStatistic>({
     url: '/bills/statistic',
     method: 'GET',
     data,

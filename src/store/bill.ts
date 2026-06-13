@@ -1,22 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getBillList, addBill as addBillApi, addBillBatch, getBillStatistic, type BillItem } from '@/api/bill'
+import { getBillList, addBill as addBillApi, addBillBatch, getBillStatistic, type Bill, type BillItem, type BillListSummary } from '@/api/bill'
 import { getCategories, type Category } from '@/api/category'
 
-export interface Bill {
-  id: string
-  userId: string
-  categoryId: string
-  amount: number
-  type: 'income' | 'expense'
-  remark: string
-  billDate: string
-  createdAt: string
-  updatedAt: string
-  isDeleted: boolean
-}
-
-export type { Category }
+export type { Bill, Category }
 
 export const useBillStore = defineStore('bill', () => {
   const bills = ref<Bill[]>([])
@@ -27,6 +14,11 @@ export const useBillStore = defineStore('bill', () => {
   const loading = ref(false)
   const hasMore = computed(() => bills.value.length < total.value)
   const currentMonth = ref('')
+  const monthSummary = ref<BillListSummary>({
+    incomeCents: 0,
+    expenseCents: 0,
+    balanceCents: 0,
+  })
 
   async function loadBills(refresh = false) {
     if (loading.value) return
@@ -43,6 +35,11 @@ export const useBillStore = defineStore('bill', () => {
         pageNo: pageNo.value,
         month: currentMonth.value || undefined,
       })
+      monthSummary.value = res.summary || {
+        incomeCents: 0,
+        expenseCents: 0,
+        balanceCents: 0,
+      }
       if (refresh) {
         bills.value = res.bills
       } else {
@@ -65,7 +62,7 @@ export const useBillStore = defineStore('bill', () => {
   }
 
   async function addBillRecord(data: BillItem) {
-    await addBillApi(data as any)
+    return await addBillApi(data)
   }
 
   async function addBillRecords(items: BillItem[]) {
@@ -74,6 +71,27 @@ export const useBillStore = defineStore('bill', () => {
 
   async function loadStatistic(year: number) {
     return await getBillStatistic({ year })
+  }
+
+  function removeBillRecord(billId: string, fallbackBill?: Bill) {
+    const index = bills.value.findIndex((bill) => bill.id === billId)
+    const removed = index > -1 ? bills.value.splice(index, 1)[0] : fallbackBill
+
+    if (!removed) return
+
+    const isCurrentMonthBill = !currentMonth.value || removed.billDate.startsWith(currentMonth.value)
+    if (!isCurrentMonthBill) return
+
+    if (index > -1) {
+      total.value = Math.max(0, total.value - 1)
+    }
+
+    if (removed.type === 'income') {
+      monthSummary.value.incomeCents = Math.max(0, monthSummary.value.incomeCents - removed.amountCents)
+    } else {
+      monthSummary.value.expenseCents = Math.max(0, monthSummary.value.expenseCents - removed.amountCents)
+    }
+    monthSummary.value.balanceCents = monthSummary.value.incomeCents - monthSummary.value.expenseCents
   }
 
   function getCategoryName(categoryId: string) {
@@ -93,10 +111,12 @@ export const useBillStore = defineStore('bill', () => {
     hasMore,
     total,
     currentMonth,
+    monthSummary,
     loadBills,
     loadCategories,
     addBillRecord,
     addBillRecords,
+    removeBillRecord,
     loadStatistic,
     setMonth,
     getCategoryName,

@@ -17,7 +17,7 @@
     <view class="amount-area">
       <text class="currency">¥</text>
       <input
-        v-model="inputAmount"
+        v-model="amountYuan"
         class="amount-input"
         type="digit"
         placeholder="0.00"
@@ -31,6 +31,16 @@
       <picker mode="date" :value="billDate" @change="onDateChange">
         <text class="date-value">{{ billDate }}</text>
       </picker>
+    </view>
+
+    <!-- 备注 -->
+    <view class="remark-area">
+      <input
+        v-model="remark"
+        class="remark-input"
+        placeholder="添加备注（可选）"
+        placeholder-class="remark-placeholder"
+      />
     </view>
 
     <!-- 分类选择 -->
@@ -50,16 +60,6 @@
           </view>
         </view>
       </view>
-    </view>
-
-    <!-- 备注 -->
-    <view class="remark-area">
-      <input
-        v-model="remark"
-        class="remark-input"
-        placeholder="添加备注（可选）"
-        placeholder-class="remark-placeholder"
-      />
     </view>
 
     <CustomTabbar />
@@ -90,6 +90,7 @@ import { ref, computed, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useBillStore } from '@/store/bill'
 import { useUserStore } from '@/store/user'
+import { yuanToCents } from '@/utils/amount'
 import { getToday } from '@/utils/date'
 import CustomTabbar from '@/components/custom-tabbar/custom-tabbar.vue'
 
@@ -100,7 +101,7 @@ const types = [
   { value: 'income' as const, label: '收入' },
 ]
 const currentType = ref<'income' | 'expense'>('expense')
-const inputAmount = ref('')
+const amountYuan = ref('')
 const selectedCategory = ref('')
 const remark = ref('')
 const billDate = ref(getToday())
@@ -126,30 +127,36 @@ async function handleSubmit() {
     uni.showToast({ title: '请选择分类', icon: 'none' })
     return
   }
-  const amount = parseFloat(inputAmount.value)
-  if (!amount || amount <= 0) {
+  const amountCents = yuanToCents(amountYuan.value)
+  if (!amountCents || amountCents <= 0) {
     uni.showToast({ title: '请输入正确的金额', icon: 'none' })
     return
   }
 
   uni.showLoading({ title: '保存中...' })
   try {
-    await billStore.addBillRecord({
+    const result = await billStore.addBillRecord({
       categoryId: selectedCategory.value,
-      amount,
+      amountCents,
       type: currentType.value,
       remark: remark.value,
       billDate: billDate.value,
     })
+    if (!result?.billId) {
+      throw new Error('新增账单失败')
+    }
     uni.hideLoading()
     uni.showToast({ title: '记账成功', icon: 'success' })
     // 重置
-    inputAmount.value = '0'
+    amountYuan.value = '0'
     selectedCategory.value = ''
     remark.value = ''
     billDate.value = getToday()
-  } catch {
+  } catch (error: any) {
     uni.hideLoading()
+    if (error?.message === '新增账单失败') {
+      uni.showToast({ title: error.message, icon: 'none' })
+    }
   }
 }
 

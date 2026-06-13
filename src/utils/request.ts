@@ -37,6 +37,20 @@ export function request<T = any>(options: RequestOptions): Promise<T> {
       },
       success: (res: any) => {
         const body = res.data || {}
+        const statusCode = Number(res.statusCode) || 0
+
+        if (statusCode < 200 || statusCode >= 300) {
+          if (statusCode === 401 || body.code === 401) {
+            handleUnauthorized()
+            reject(new Error('Unauthorized'))
+            return
+          }
+
+          const message = body.message || `请求失败(${statusCode})`
+          uni.showToast({ title: message, icon: 'none' })
+          reject(new Error(message))
+          return
+        }
 
         if (body.code === 0) {
           resolve(body.data)
@@ -79,6 +93,21 @@ export function uploadFile<T = any>(filePath: string, url: string): Promise<T> {
           body = typeof res.data === 'string' ? JSON.parse(res.data || '{}') : (res.data || {})
         } catch {
           const message = '上传返回格式错误'
+          uni.showToast({ title: message, icon: 'none' })
+          reject(new Error(message))
+          return
+        }
+
+        const statusCode = Number(res.statusCode) || 0
+
+        if (statusCode < 200 || statusCode >= 300) {
+          if (statusCode === 401 || body.code === 401) {
+            handleUnauthorized()
+            reject(new Error('Unauthorized'))
+            return
+          }
+
+          const message = body.message || `上传失败(${statusCode})`
           uni.showToast({ title: message, icon: 'none' })
           reject(new Error(message))
           return

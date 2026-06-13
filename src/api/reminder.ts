@@ -1,8 +1,8 @@
 import { request } from '@/utils/request'
 
 export interface ReminderSettings {
-  enabled: boolean
-  time: string
+  isEnabled: boolean
+  reminderTime: string
 }
 
 // 获取提醒设置
@@ -14,7 +14,7 @@ export function getReminder() {
 }
 
 // 保存提醒设置（无需传 userId）
-export function saveReminder(data: { enabled: boolean; time: string }) {
+export function saveReminder(data: ReminderSettings) {
   return request({
     url: '/reminders',
     method: 'POST',

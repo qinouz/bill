@@ -12,8 +12,8 @@
         <!-- 金额 -->
         <view class="result-item">
           <text class="item-label">金额</text>
-          <text class="item-value amount" :class="{ empty: !result?.amount }">
-            {{ result?.amount ? '¥' + result.amount.toFixed(2) : '未识别' }}
+          <text class="item-value amount" :class="{ empty: !result?.amountCents }">
+            {{ result?.amountCents ? '¥' + formatMoneyFromCents(result.amountCents) : '未识别' }}
           </text>
         </view>
 
@@ -70,23 +70,24 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { VoiceParseResult } from '@/api/voice'
+import type { VoiceItem } from '@/api/voice'
 import type { Category } from '@/store/bill'
+import { formatMoneyFromCents } from '@/utils/amount'
 
 const props = defineProps<{
   visible: boolean
-  result: VoiceParseResult | null
+  result: VoiceItem | null
   categories: Category[]
 }>()
 
 const emit = defineEmits<{
-  confirm: [data: { categoryId: string; amount: number; type: string; remark: string; billDate: string }]
+  confirm: [data: { categoryId: string; amountCents: number; type: string; remark: string; billDate: string }]
   close: []
   reRecord: []
 }>()
 
 const canConfirm = computed(() => {
-  return props.result?.amount && props.result?.categoryId
+  return props.result?.amountCents && props.result?.categoryId
 })
 
 const confidenceText = computed(() => {
@@ -103,7 +104,7 @@ function handleConfirm() {
 
   emit('confirm', {
     categoryId: props.result.categoryId!,
-    amount: props.result.amount!,
+    amountCents: props.result.amountCents!,
     type: props.result.type,
     remark: props.result.remark,
     billDate: props.result.billDate

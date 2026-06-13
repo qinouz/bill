@@ -23,7 +23,7 @@
       </view>
       <view class="card balance-card">
         <text class="card-label">年结余</text>
-        <text class="card-amount" :class="parseFloat(yearBalance) >= 0 ? 'positive' : 'negative'">
+        <text class="card-amount" :class="yearBalanceCents >= 0 ? 'positive' : 'negative'">
           {{ yearBalance }}
         </text>
       </view>
@@ -55,6 +55,7 @@ import { ref, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getBillStatistic } from '@/api/bill'
 import { useUserStore } from '@/store/user'
+import { formatMoneyFromCents } from '@/utils/amount'
 import CustomTabbar from '@/components/custom-tabbar/custom-tabbar.vue'
 
 const userStore = useUserStore()
@@ -63,6 +64,7 @@ const selectedYear = ref(new Date().getFullYear())
 const yearIncome = ref('0.00')
 const yearExpense = ref('0.00')
 const yearBalance = ref('0.00')
+const yearBalanceCents = ref(0)
 const monthlyData = ref<{ month: string; income: string; expense: string }[]>([])
 
 function changeYear(delta: number) {
@@ -74,20 +76,21 @@ async function loadStatistic() {
   try {
     const data = await getBillStatistic({ year: selectedYear.value })
     if (data) {
-      yearIncome.value = (data.income || 0).toFixed(2)
-      yearExpense.value = (data.expense || 0).toFixed(2)
-      yearBalance.value = (data.balance || 0).toFixed(2)
+      yearIncome.value = formatMoneyFromCents(data.incomeCents || 0)
+      yearExpense.value = formatMoneyFromCents(data.expenseCents || 0)
+      yearBalanceCents.value = data.balanceCents || 0
+      yearBalance.value = formatMoneyFromCents(yearBalanceCents.value)
 
       // 构造月度数据，key 是 "01" 到 "12"
       const monthly = data.monthly || {}
       const result = []
       for (let i = 1; i <= 12; i++) {
         const month = String(i).padStart(2, '0')
-        const item = monthly[month] || { income: 0, expense: 0 }
+        const item = monthly[month] || { incomeCents: 0, expenseCents: 0 }
         result.push({
           month,
-          income: Number(item.income || 0).toFixed(2),
-          expense: Number(item.expense || 0).toFixed(2),
+          income: formatMoneyFromCents(item.incomeCents || 0),
+          expense: formatMoneyFromCents(item.expenseCents || 0),
         })
       }
       monthlyData.value = result

@@ -64,7 +64,7 @@ import { ref, computed, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useBillStore } from '@/store/bill'
 import { useUserStore } from '@/store/user'
-import { addCategory, deleteCategory } from '@/api/category'
+import { addCategory, deleteCategory, type Category } from '@/api/category'
 
 const billStore = useBillStore()
 
@@ -100,7 +100,7 @@ async function handleAdd() {
   } catch {}
 }
 
-function handleDelete(cat: any) {
+function handleDelete(cat: Category) {
   uni.showModal({
     title: '确认删除',
     content: `确定删除分类"${cat.name}"吗？`,

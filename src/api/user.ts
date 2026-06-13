@@ -1,13 +1,17 @@
 import { request } from '@/utils/request'
 
-export interface LoginResult {
-  token: string
+export interface UserProfile {
   userId: string
   nickname: string
   avatarUrl: string
+  createdAt: number
+  updatedAt: number
 }
 
-// 登录：uni.login 获取 code，然后调用后端
+export interface LoginResult {
+  token: string
+}
+
 export function login(): Promise<LoginResult> {
   return new Promise((resolve, reject) => {
     uni.login({
@@ -20,14 +24,7 @@ export function login(): Promise<LoginResult> {
             data: { code },
           })
 
-          // 存储 token 和用户信息
           uni.setStorageSync('token', data.token)
-          uni.setStorageSync('userInfo', {
-            userId: data.userId,
-            nickname: data.nickname,
-            avatarUrl: data.avatarUrl,
-          })
-
           resolve(data)
         } catch (err) {
           reject(err)
@@ -38,7 +35,13 @@ export function login(): Promise<LoginResult> {
   })
 }
 
-// 获取用户统计（无需传 userId，后端从 JWT 解析）
+export function getUserProfile() {
+  return request<UserProfile>({
+    url: '/users/profile',
+    method: 'GET',
+  })
+}
+
 export function getUserStats() {
   return request<{ consecutiveDays: number; recordDays: number; billCount: number }>({
     url: '/users/stats',

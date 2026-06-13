@@ -63,7 +63,7 @@
           <input
             class="row-input amount-input"
             type="digit"
-            :value="item.amount?.toString() || ''"
+            :value="item.amountCents ? centsToYuanInput(item.amountCents) : ''"
             placeholder="输入金额"
             @input="onAmountChange($event, index)"
           />
@@ -86,10 +86,10 @@
           </picker>
         </view>
 
-        <view class="card-row">
+        <view class="card-row remark-row">
           <text class="row-label">备注</text>
           <input
-            class="row-input"
+            class="row-input remark-input"
             :value="item.remark"
             placeholder="可选备注"
             @input="onRemarkChange($event, index)"
@@ -137,9 +137,10 @@
 import { ref, computed, nextTick } from 'vue'
 import { onUnload } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
-import { useBillStore } from '@/store/bill'
+import { useBillStore, type Category } from '@/store/bill'
 import { useVoiceRecord } from '@/composables/useVoiceRecord'
 import { recognizeVoice } from '@/api/voice'
+import { centsToYuanInput, yuanToCents } from '@/utils/amount'
 import type { VoiceItem } from '@/api/voice'
 
 type Confidence = VoiceItem['confidence']
@@ -321,7 +322,7 @@ function closeCategoryPicker() {
   editingIndex.value = -1
 }
 
-function selectCategory(cat: any) {
+function selectCategory(cat: Category) {
   if (editingIndex.value >= 0) {
     billItems.value[editingIndex.value].categoryId = cat.id
     billItems.value[editingIndex.value].categoryName = cat.name
@@ -331,8 +332,7 @@ function selectCategory(cat: any) {
 }
 
 function onAmountChange(e: any, index: number) {
-  const val = parseFloat(e.detail.value)
-  billItems.value[index].amount = Number.isFinite(val) ? val : null
+  billItems.value[index].amountCents = yuanToCents(e.detail.value)
   billItems.value[index].confidence = getConfidence(billItems.value[index])
 }
 
@@ -354,7 +354,7 @@ function toggleType(index: number) {
 
 function handleAddItem() {
   billItems.value.push({
-    amount: null,
+    amountCents: null,
     categoryId: null,
     categoryName: null,
     type: 'expense',
@@ -384,7 +384,7 @@ async function handleConfirm() {
     .filter((item) => isValidBillItem(item))
     .map((item) => ({
       categoryId: item.categoryId!,
-      amount: Number(item.amount),
+      amountCents: item.amountCents!,
       type: item.type,
       remark: item.remark || '',
       billDate: item.billDate || getToday(),
@@ -412,11 +412,11 @@ async function handleConfirm() {
 function normalizeVoiceItems(items: any): VoiceItem[] {
   const list = Array.isArray(items) ? items : []
   return list.map((item) => {
-    const amount = parseAmount(item.amount)
-    const categoryId = item.categoryId || item.category_id || null
+    const amountCents = parseAmountCents(item.amountCents)
+    const categoryId = item.categoryId || null
     const categoryName = item.categoryName || item.category || null
     const normalized: VoiceItem = {
-      amount,
+      amountCents,
       categoryId,
       categoryName,
       type: item.type === 'income' ? 'income' : 'expense',
@@ -429,11 +429,9 @@ function normalizeVoiceItems(items: any): VoiceItem[] {
   })
 }
 
-function parseAmount(value: unknown) {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null
-  if (typeof value === 'string') {
-    const amount = parseFloat(value)
-    return Number.isFinite(amount) ? amount : null
+function parseAmountCents(amountCents: unknown) {
+  if (typeof amountCents === 'number' && Number.isFinite(amountCents)) {
+    return amountCents
   }
   return null
 }
@@ -450,13 +448,13 @@ function normalizeConfidence(value: unknown): Confidence | '' {
 }
 
 function getConfidence(item: VoiceItem): Confidence {
-  if (item.amount && item.categoryId) return 'high'
-  if (item.amount || item.categoryId) return 'medium'
+  if (item.amountCents && item.categoryId) return 'high'
+  if (item.amountCents || item.categoryId) return 'medium'
   return 'low'
 }
 
 function isValidBillItem(item: VoiceItem) {
-  return Number(item.amount) > 0 && !!item.categoryId
+  return Number(item.amountCents) > 0 && !!item.categoryId
 }
 
 function getToday() {
@@ -683,6 +681,12 @@ function resetPendingRecord() {
   border-bottom: none;
 }
 
+.remark-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12rpx;
+}
+
 .row-label {
   font-size: 28rpx;
   color: #666;
@@ -710,6 +714,16 @@ function resetPendingRecord() {
   text-align: right;
   font-size: 28rpx;
   color: #333;
+}
+
+.remark-input {
+  width: 100%;
+  min-height: 72rpx;
+  box-sizing: border-box;
+  padding: 16rpx 20rpx;
+  border-radius: 8rpx;
+  background-color: #f7f8fa;
+  text-align: left;
 }
 
 .amount-input {

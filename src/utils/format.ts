@@ -1,3 +1,5 @@
-export function formatMoney(amount: number): string {
-  return amount.toFixed(2)
+import { formatMoneyFromCents } from './amount'
+
+export function formatMoney(cents: number): string {
+  return formatMoneyFromCents(cents)
 }

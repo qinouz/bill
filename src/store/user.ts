@@ -1,16 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { login as loginApi, getUserStats } from '@/api/user'
+import { login as loginApi, getUserProfile, getUserStats, type UserProfile } from '@/api/user'
 import { initCategories } from '@/api/category'
 
-export interface User {
-  userId: string
-  nickname: string
-  avatarUrl: string
-}
-
 export const useUserStore = defineStore('user', () => {
-  const userInfo = ref<User | null>(null)
+  const userInfo = ref<UserProfile | null>(null)
   const isLogin = computed(() => !!userInfo.value && !!uni.getStorageSync('token'))
   const stats = ref({ consecutiveDays: 0, recordDays: 0, billCount: 0 })
 
@@ -24,14 +18,11 @@ export const useUserStore = defineStore('user', () => {
 
     try {
       // 调用登录（内部会调用 uni.login 获取 code）
-      const data = await loginApi()
+      await loginApi()
 
-      const user: User = {
-        userId: data.userId,
-        nickname: data.nickname,
-        avatarUrl: data.avatarUrl,
-      }
+      const user = await getUserProfile()
       userInfo.value = user
+      uni.setStorageSync('userInfo', user)
 
       // 初始化默认分类（仅新用户）
       if (!cached) {

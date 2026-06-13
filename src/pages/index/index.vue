@@ -51,7 +51,7 @@
           <view class="bill-right">
             <text class="bill-date-tag">{{ formatDate(bill.billDate) }}</text>
             <text class="bill-amount" :class="bill.type">
-              {{ bill.type === 'income' ? '+' : '-' }}{{ bill.amount.toFixed(2) }}
+              {{ bill.type === 'income' ? '+' : '-' }}{{ formatMoneyFromCents(bill.amountCents) }}
             </text>
             <view class="delete-btn" @tap="handleDelete(bill.id)">
               <text>删除</text>
@@ -73,10 +73,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app'
+import { onLoad, onPullDownRefresh, onReachBottom, onShow, onUnload } from '@dcloudio/uni-app'
 import { useBillStore } from '@/store/bill'
 import { useUserStore } from '@/store/user'
 import { deleteBill as deleteBillApi } from '@/api/bill'
+import { formatMoneyFromCents } from '@/utils/amount'
 import CustomTabbar from '@/components/custom-tabbar/custom-tabbar.vue'
 
 const billStore = useBillStore()
@@ -87,6 +88,20 @@ function getCurrentMonth() {
 }
 
 const currentMonth = ref(getCurrentMonth())
+
+function handleBillDeleted(data: { billId?: string }) {
+  if (data?.billId) {
+    billStore.removeBillRecord(data.billId)
+  }
+}
+
+onLoad(() => {
+  uni.$on('billDeleted', handleBillDeleted)
+})
+
+onUnload(() => {
+  uni.$off('billDeleted', handleBillDeleted)
+})
 
 function changeMonth(delta: number) {
   const [year, month] = currentMonth.value.split('-').map(Number)
@@ -103,17 +118,11 @@ function onMonthChange(e: any) {
 }
 
 const monthIncome = computed(() => {
-  return billStore.bills
-    .filter((b) => b.type === 'income')
-    .reduce((sum, b) => sum + b.amount, 0)
-    .toFixed(2)
+  return formatMoneyFromCents(billStore.monthSummary.incomeCents)
 })
 
 const monthExpense = computed(() => {
-  return billStore.bills
-    .filter((b) => b.type === 'expense')
-    .reduce((sum, b) => sum + b.amount, 0)
-    .toFixed(2)
+  return formatMoneyFromCents(billStore.monthSummary.expenseCents)
 })
 
 const groupedBills = computed(() => {
@@ -128,10 +137,10 @@ const groupedBills = computed(() => {
 })
 
 function groupExpense(bills: typeof billStore.bills) {
-  const expense = bills
+  const expenseCents = bills
     .filter((b) => b.type === 'expense')
-    .reduce((sum, b) => sum + b.amount, 0)
-  return expense > 0 ? `-${expense.toFixed(2)}` : ''
+    .reduce((sum, b) => sum + b.amountCents, 0)
+  return expenseCents > 0 ? `-${formatMoneyFromCents(expenseCents)}` : ''
 }
 
 function formatDate(billDate: string) {
@@ -156,12 +165,7 @@ async function handleDelete(billId: string) {
         try {
           await deleteBillApi({ billId })
           uni.showToast({ title: '已删除', icon: 'success' })
-          // 本地移除，不刷新
-          const index = billStore.bills.findIndex(b => b._id === billId)
-          if (index > -1) {
-            billStore.bills.splice(index, 1)
-            billStore.total--
-          }
+          billStore.removeBillRecord(billId)
         } catch {
           uni.showToast({ title: '删除失败', icon: 'none' })
         }

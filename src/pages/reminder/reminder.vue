@@ -46,18 +46,29 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { saveReminder, testReminder } from '@/api/reminder'
+import { getReminder, saveReminder, testReminder } from '@/api/reminder'
 
 const isEnabled = ref(false)
 const reminderTime = ref('20:00')
 
-onMounted(() => {
-  const settings = uni.getStorageSync('reminderSettings')
-  if (settings) {
-    isEnabled.value = settings.enabled || false
-    reminderTime.value = settings.time || '20:00'
-  }
+onMounted(async () => {
+  await loadSettings()
 })
+
+async function loadSettings() {
+  try {
+    const settings = await getReminder()
+    isEnabled.value = settings.isEnabled || false
+    reminderTime.value = settings.reminderTime || '20:00'
+    cacheSettings()
+  } catch {
+    const settings = uni.getStorageSync('reminderSettings')
+    if (settings) {
+      isEnabled.value = settings.isEnabled || false
+      reminderTime.value = settings.reminderTime || '20:00'
+    }
+  }
+}
 
 function toggleReminder(e: any) {
   isEnabled.value = e.detail.value
@@ -70,19 +81,23 @@ function onTimeChange(e: any) {
 }
 
 async function saveSettings() {
-  uni.setStorageSync('reminderSettings', {
-    enabled: isEnabled.value,
-    time: reminderTime.value,
-  })
+  cacheSettings()
 
   try {
     await saveReminder({
-      enabled: isEnabled.value,
-      time: reminderTime.value,
+      isEnabled: isEnabled.value,
+      reminderTime: reminderTime.value,
     })
   } catch (err) {
     console.error('保存提醒设置失败:', err)
   }
+}
+
+function cacheSettings() {
+  uni.setStorageSync('reminderSettings', {
+    isEnabled: isEnabled.value,
+    reminderTime: reminderTime.value,
+  })
 }
 
 function subscribeMessage() {

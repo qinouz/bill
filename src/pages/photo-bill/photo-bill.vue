@@ -74,7 +74,7 @@
           <input
             class="row-input amount-input"
             type="digit"
-            :value="item.amount?.toString() || ''"
+            :value="item.amountCents ? centsToYuanInput(item.amountCents) : ''"
             placeholder="输入金额"
             @input="onAmountChange($event, index)"
           />
@@ -152,8 +152,10 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import { useUserStore } from '@/store/user'
-import { useBillStore } from '@/store/bill'
+import { useBillStore, type Category } from '@/store/bill'
 import { recognizePhoto } from '@/api/photo'
+import type { BillItem } from '@/api/bill'
+import { centsToYuanInput, yuanToCents } from '@/utils/amount'
 import type { VoiceItem } from '@/api/voice'
 
 const userStore = useUserStore()
@@ -170,12 +172,12 @@ const currentCategories = computed(() => {
   if (editingIndex.value < 0) return []
   const item = billItems.value[editingIndex.value]
   const type = item?.type || 'expense'
-  return billStore.categories.filter((c: any) => c.type === type)
+  return billStore.categories.filter((c) => c.type === type)
 })
 
 // 有效记录数
 const validCount = computed(() => {
-  return billItems.value.filter((item: any) => item.amount && item.categoryId).length
+  return billItems.value.filter((item: any) => item.amountCents && item.categoryId).length
 })
 
 // 是否可确认
@@ -312,7 +314,7 @@ function closeCategoryPicker() {
 }
 
 // 选择分类
-function selectCategory(cat: any) {
+function selectCategory(cat: Category) {
   if (editingIndex.value >= 0) {
     billItems.value[editingIndex.value].categoryId = cat.id
     billItems.value[editingIndex.value].categoryName = cat.name
@@ -365,8 +367,7 @@ function handleRetry() {
 
 // 金额变化
 function onAmountChange(e: any, index: number) {
-  const val = parseFloat(e.detail.value)
-  billItems.value[index].amount = isNaN(val) ? null : val
+  billItems.value[index].amountCents = yuanToCents(e.detail.value)
 }
 
 // 日期变化
@@ -387,7 +388,7 @@ function toggleType(index: number) {
 // 新增一条
 function handleAddItem() {
   billItems.value.push({
-    amount: null,
+    amountCents: null,
     categoryId: null,
     categoryName: null,
     type: 'expense',
@@ -416,13 +417,21 @@ function getConfidenceText(confidence: string) {
 async function handleConfirm() {
   if (!canConfirm.value) return
 
-  const validItems = billItems.value.filter((item: any) => item.amount && item.categoryId)
+  const validItems: BillItem[] = billItems.value
+    .filter((item: any) => item.amountCents && item.categoryId)
+    .map((item: any) => ({
+      categoryId: item.categoryId,
+      amountCents: item.amountCents,
+      type: item.type,
+      remark: item.remark || '',
+      billDate: item.billDate,
+    }))
   if (validItems.length === 0) return
 
   uni.showLoading({ title: '保存中...' })
 
   try {
-    const result = await billStore.addBillRecords(validItems as any[])
+    const result = await billStore.addBillRecords(validItems)
     uni.hideLoading()
     uni.showToast({ title: `成功保存${result.count}条`, icon: 'success' })
   } catch {
