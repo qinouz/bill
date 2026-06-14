@@ -38,6 +38,18 @@ export function formatMoneyFromCents(cents: unknown): string {
   return `${sign}${yuan}.${centPart}`
 }
 
+export function formatCurrencyFromCents(cents: unknown, withSymbol = true): string {
+  const value = typeof cents === 'number' ? cents : Number(cents)
+  if (!Number.isFinite(value)) return withSymbol ? '¥0.00' : '0.00'
+
+  const normalized = Math.trunc(value)
+  const sign = normalized < 0 ? '-' : ''
+  const abs = Math.abs(normalized)
+  const yuan = Math.floor(abs / 100).toLocaleString('zh-CN')
+  const centPart = String(abs % 100).padStart(2, '0')
+  return `${sign}${withSymbol ? '¥' : ''}${yuan}.${centPart}`
+}
+
 export function centsToYuanInput(cents: unknown): string {
   return formatMoneyFromCents(cents)
 }

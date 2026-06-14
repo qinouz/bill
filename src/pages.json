@@ -21,6 +21,20 @@
       }
     },
     {
+      "path": "pages/statistic-category/statistic-category",
+      "style": {
+        "navigationBarTitleText": "分类账单",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/statistic-bills/statistic-bills",
+      "style": {
+        "navigationBarTitleText": "全部账单",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
       "path": "pages/mine/mine",
       "style": {
         "navigationBarTitleText": "我的"

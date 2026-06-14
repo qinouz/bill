@@ -1,110 +1,351 @@
 <template>
   <view class="page">
-    <!-- 年份选择 -->
-    <view class="year-bar">
-      <view class="year-btn" @tap="changeYear(-1)">
-        <text>上一年</text>
-      </view>
-      <text class="year-title">{{ selectedYear }}年统计</text>
-      <view class="year-btn" @tap="changeYear(1)">
-        <text>下一年</text>
+    <view class="top-bar">
+      <picker mode="date" fields="month" :value="monthValue" :end="maxMonthValue" @change="onMonthChange">
+        <view class="month-pill">
+          <text>{{ selectedYear }}年{{ selectedMonth }}月</text>
+          <text class="pill-arrow">⌄</text>
+        </view>
+      </picker>
+    </view>
+
+    <view class="type-tabs">
+      <view
+        v-for="item in typeOptions"
+        :key="item.value"
+        class="type-tab"
+        :class="{ active: currentType === item.value }"
+        @tap="switchType(item.value)"
+      >
+        <text>{{ item.label }}</text>
       </view>
     </view>
 
-    <!-- 年度卡片 -->
-    <view class="cards">
-      <view class="card income-card">
-        <text class="card-label">年收入</text>
-        <text class="card-amount">{{ yearIncome }}</text>
-      </view>
-      <view class="card expense-card">
-        <text class="card-label">年支出</text>
-        <text class="card-amount">{{ yearExpense }}</text>
-      </view>
-      <view class="card balance-card">
-        <text class="card-label">年结余</text>
-        <text class="card-amount" :class="yearBalanceCents >= 0 ? 'positive' : 'negative'">
-          {{ yearBalance }}
-        </text>
-      </view>
+    <view v-if="error" class="state-card">
+      <text class="state-title">月账单加载失败</text>
+      <text class="state-desc">请稍后重试</text>
+      <button class="state-button" @tap="loadStatistics">重新加载</button>
     </view>
 
-    <!-- 月份列表 -->
-    <view class="month-section">
-      <text class="section-title">月份统计</text>
-      <view v-for="m in monthlyData" :key="m.month" class="month-row">
-        <text class="month-name">{{ m.month }}月</text>
-        <view class="month-data">
-          <view class="data-item">
-            <text class="data-label">收入</text>
-            <text class="data-value income">{{ m.income }}</text>
+    <view v-else>
+      <view class="summary-card">
+        <view class="summary-main">
+          <text class="summary-label">本月{{ currentTypeLabel }}</text>
+          <text class="summary-amount">{{ currentAmountText }}</text>
+          <text class="summary-count">共{{ currentCount }}笔</text>
+        </view>
+        <view class="summary-side">
+          <text class="side-label">本月{{ otherTypeLabel }}</text>
+          <text class="side-amount">{{ otherAmountText }}</text>
+        </view>
+      </view>
+
+      <view class="section-card">
+        <view class="section-header">
+          <text class="section-title">最近六个月</text>
+        </view>
+        <view v-if="loading" class="loading-line">加载中...</view>
+        <scroll-view v-else class="trend-scroll" scroll-x enable-flex show-scrollbar="false">
+          <view class="trend-chart">
+            <view
+              v-for="item in trendItems"
+              :key="`${item.year}-${item.month}`"
+              class="trend-item"
+            >
+              <text class="trend-value" :class="{ active: isSelectedMonth(item.year, item.month) }">
+                {{ item.amountCents > 0 ? shortAmount(item.amountCents) : '' }}
+              </text>
+              <view class="bar-track">
+                <view
+                  class="bar"
+                  :class="{ active: isSelectedMonth(item.year, item.month) }"
+                  :style="{ height: `${item.height}rpx` }"
+                />
+              </view>
+              <text class="trend-month" :class="{ active: isSelectedMonth(item.year, item.month) }">
+                {{ item.month }}月
+              </text>
+            </view>
           </view>
-          <view class="data-item">
-            <text class="data-label">支出</text>
-            <text class="data-value expense">{{ m.expense }}</text>
+        </scroll-view>
+      </view>
+
+      <view class="section-card">
+        <view class="section-header">
+          <text class="section-title">分类统计</text>
+        </view>
+        <view v-if="loading" class="loading-line">加载中...</view>
+        <view v-else-if="categoryItems.length === 0" class="empty-block">
+          <text>暂无分类统计</text>
+        </view>
+        <view v-else class="category-list">
+          <view
+            v-for="category in categoryItems"
+            :key="category.categoryId"
+            class="category-row"
+            @tap="goCategoryDetail(category)"
+          >
+            <view class="category-icon-wrap">
+              <text class="category-icon">{{ category.categoryIcon || '…' }}</text>
+            </view>
+            <view class="category-main">
+              <view class="category-line">
+                <text class="category-name">{{ category.categoryName }}</text>
+                <text class="category-money">{{ moneyText(category.amountCents) }}</text>
+              </view>
+              <view class="progress-line">
+                <view class="progress-track">
+                  <view class="progress-fill" :style="{ width: `${category.barPercent}%` }" />
+                </view>
+                <text class="category-percent">{{ percentText(category.percentage) }}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="section-card recent-card">
+        <view class="section-header">
+          <text class="section-title">最近账单</text>
+        </view>
+        <view v-if="loading" class="loading-line">加载中...</view>
+        <view v-else-if="recentBills.length === 0" class="empty-block">
+          <text>{{ emptyBillText }}</text>
+        </view>
+        <view v-else class="recent-list">
+          <view v-for="bill in recentBills" :key="bill.id" class="bill-row" @tap="goBillDetail(bill.id)">
+            <view class="bill-icon-wrap">
+              <text class="bill-icon">{{ bill.categoryIcon || '📝' }}</text>
+            </view>
+            <view class="bill-info">
+              <text class="bill-title">{{ billTitle(bill) }}</text>
+              <text class="bill-meta">{{ bill.categoryName || '未分类' }} · {{ dateText(bill.billDate || bill.occurredAt) }}</text>
+            </view>
+            <text class="bill-amount" :class="bill.type">{{ billMoneyText(bill) }}</text>
+          </view>
+          <view class="all-link" @tap="goAllBills">
+            <text>查看全部账单</text>
+            <text class="link-arrow">›</text>
           </view>
         </view>
       </view>
     </view>
+
+    <view v-if="!error && !loading && currentCount === 0" class="empty-tip">
+      <text class="empty-title">{{ allEmptyText }}</text>
+      <text class="empty-desc">记一笔后，这里会生成月度统计</text>
+      <button class="empty-button" @tap="goAddBill">去记一笔</button>
+    </view>
+
     <CustomTabbar />
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { getBillStatistic } from '@/api/bill'
+import { getMonthlyStatistics, type MonthlyStatistics } from '@/api/bill'
 import { useUserStore } from '@/store/user'
-import { formatMoneyFromCents } from '@/utils/amount'
+import { formatCurrencyFromCents } from '@/utils/amount'
 import CustomTabbar from '@/components/custom-tabbar/custom-tabbar.vue'
 
+type BillType = 'income' | 'expense'
+
 const userStore = useUserStore()
-const selectedYear = ref(new Date().getFullYear())
+const now = new Date()
+const selectedYear = ref(now.getFullYear())
+const selectedMonth = ref(now.getMonth() + 1)
+const currentType = ref<BillType>('expense')
+const statistics = ref<MonthlyStatistics | null>(null)
+const loading = ref(false)
+const error = ref('')
+let requestId = 0
 
-const yearIncome = ref('0.00')
-const yearExpense = ref('0.00')
-const yearBalance = ref('0.00')
-const yearBalanceCents = ref(0)
-const monthlyData = ref<{ month: string; income: string; expense: string }[]>([])
+const typeOptions = [
+  { value: 'expense' as const, label: '支出' },
+  { value: 'income' as const, label: '收入' },
+]
 
-function changeYear(delta: number) {
-  selectedYear.value += delta
-  loadStatistic()
+const maxMonthValue = computed(() => {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+})
+
+const monthValue = computed(() => {
+  return `${selectedYear.value}-${String(selectedMonth.value).padStart(2, '0')}`
+})
+
+const currentTypeLabel = computed(() => currentType.value === 'expense' ? '支出' : '收入')
+const otherTypeLabel = computed(() => currentType.value === 'expense' ? '收入' : '支出')
+
+const currentAmount = computed(() => statistics.value?.summary.currentTypeAmountCents || 0)
+const currentCount = computed(() => statistics.value?.summary.currentTypeCount || 0)
+const monthBillCount = computed(() => {
+  const summary = statistics.value?.summary
+  return (summary?.expenseCount || 0) + (summary?.incomeCount || 0)
+})
+const currentAmountText = computed(() => moneyText(currentAmount.value))
+const otherAmountText = computed(() => {
+  const summary = statistics.value?.summary
+  const amountCents = currentType.value === 'expense' ? summary?.incomeAmountCents : summary?.expenseAmountCents
+  return moneyText(amountCents || 0)
+})
+
+const trendItems = computed(() => {
+  const trend = statistics.value?.trend || []
+  const maxAmountCents = Math.max(...trend.map((item) => Number(item.amountCents) || 0), 0)
+  return trend.map((item) => {
+    const amountCents = Number(item.amountCents) || 0
+    return {
+      ...item,
+      height: amountCents === 0 ? 8 : Math.max(24, Math.round((amountCents / maxAmountCents) * 150)),
+    }
+  })
+})
+
+const categoryItems = computed(() => {
+  const categories = statistics.value?.categories || []
+  const maxAmountCents = Math.max(...categories.map((item) => Number(item.amountCents) || 0), 1)
+  return categories.map((item) => ({
+    ...item,
+    barPercent: Math.max(4, Math.round(((Number(item.amountCents) || 0) / maxAmountCents) * 100)),
+  }))
+})
+
+const recentBills = computed(() => statistics.value?.recentBills || [])
+const emptyBillText = computed(() => `本月还没有${currentTypeLabel.value}记录`)
+const allEmptyText = computed(() => monthBillCount.value === 0 ? '本月还没有账单' : emptyBillText.value)
+
+function moneyText(amountCents: unknown) {
+  return formatCurrencyFromCents(amountCents)
 }
 
-async function loadStatistic() {
-  try {
-    const data = await getBillStatistic({ year: selectedYear.value })
-    if (data) {
-      yearIncome.value = formatMoneyFromCents(data.incomeCents || 0)
-      yearExpense.value = formatMoneyFromCents(data.expenseCents || 0)
-      yearBalanceCents.value = data.balanceCents || 0
-      yearBalance.value = formatMoneyFromCents(yearBalanceCents.value)
+function percentText(value: unknown) {
+  const percent = Number(value)
+  if (!Number.isFinite(percent) || percent <= 0) return '0%'
+  if (percent < 0.01) return '<0.01%'
+  return `${percent.toFixed(1)}%`
+}
 
-      // 构造月度数据，key 是 "01" 到 "12"
-      const monthly = data.monthly || {}
-      const result = []
-      for (let i = 1; i <= 12; i++) {
-        const month = String(i).padStart(2, '0')
-        const item = monthly[month] || { incomeCents: 0, expenseCents: 0 }
-        result.push({
-          month,
-          income: formatMoneyFromCents(item.incomeCents || 0),
-          expense: formatMoneyFromCents(item.expenseCents || 0),
-        })
-      }
-      monthlyData.value = result
+function shortAmount(amountCents: number) {
+  const yuan = Math.round(amountCents / 100)
+  if (yuan >= 10000) return `${(yuan / 10000).toFixed(1)}万`
+  return String(yuan)
+}
+
+function isSelectedMonth(year: number, month: number) {
+  return selectedYear.value === year && selectedMonth.value === month
+}
+
+function onMonthChange(e: any) {
+  const value = e.detail.value || ''
+  const [year, month] = value.split('-').map(Number)
+  if (!year || !month) return
+
+  const maxYear = now.getFullYear()
+  const maxMonth = now.getMonth() + 1
+  if (year > maxYear || (year === maxYear && month > maxMonth)) {
+    uni.showToast({ title: '不能选择未来月份', icon: 'none' })
+    return
+  }
+
+  selectedYear.value = year
+  selectedMonth.value = month
+  loadStatistics()
+}
+
+function switchType(type: BillType) {
+  if (currentType.value === type) return
+  currentType.value = type
+  loadStatistics()
+}
+
+async function loadStatistics() {
+  const currentRequest = ++requestId
+  loading.value = true
+  error.value = ''
+
+  try {
+    const data = await getMonthlyStatistics({
+      year: selectedYear.value,
+      month: selectedMonth.value,
+      type: currentType.value,
+    })
+    if (currentRequest !== requestId) return
+    statistics.value = data
+  } catch (err: any) {
+    if (currentRequest !== requestId) return
+    error.value = err?.message || '月账单加载失败'
+  } finally {
+    if (currentRequest === requestId) {
+      loading.value = false
     }
-  } catch {}
+  }
+}
+
+function billTitle(bill: any) {
+  return bill.remark || bill.title || bill.categoryName || '账单'
+}
+
+function billAmount(bill: any) {
+  return Number(bill.amountCents) || 0
+}
+
+function billMoneyText(bill: any) {
+  const sign = bill.type === 'income' ? '+' : '-'
+  return `${sign}${moneyText(billAmount(bill))}`
+}
+
+function dateText(date?: string) {
+  if (!date) return ''
+  const parts = date.split('-')
+  if (parts.length < 3) return date
+  const month = Number(parts[1])
+  const day = Number(parts[2])
+  return `${month}月${day}日`
+}
+
+function goCategoryDetail(category: any) {
+  if (category.categoryId === 'other') {
+    uni.showToast({ title: '其他分类明细暂不支持', icon: 'none' })
+    return
+  }
+
+  const query = [
+    `year=${selectedYear.value}`,
+    `month=${selectedMonth.value}`,
+    `type=${currentType.value}`,
+    `categoryId=${encodeURIComponent(category.categoryId)}`,
+    `categoryName=${encodeURIComponent(category.categoryName || '')}`,
+    `categoryIcon=${encodeURIComponent(category.categoryIcon || '')}`,
+    `amountCents=${category.amountCents || 0}`,
+    `count=${category.count || 0}`,
+    `percentage=${category.percentage || 0}`,
+  ].join('&')
+
+  uni.navigateTo({ url: `/pages/statistic-category/statistic-category?${query}` })
+}
+
+function goAllBills() {
+  uni.navigateTo({
+    url: `/pages/statistic-bills/statistic-bills?year=${selectedYear.value}&month=${selectedMonth.value}&type=${currentType.value}`,
+  })
+}
+
+function goBillDetail(id: string) {
+  uni.navigateTo({ url: `/pages/bill-detail/bill-detail?id=${id}` })
+}
+
+function goAddBill() {
+  uni.switchTab({ url: '/pages/bills/bills' })
 }
 
 onShow(() => {
   if (userStore.userInfo) {
-    loadStatistic()
+    loadStatistics()
   } else {
     const stopWatch = watch(() => userStore.userInfo, (val: any) => {
       if (val) {
-        loadStatistic()
+        loadStatistics()
         stopWatch()
       }
     })
@@ -115,136 +356,396 @@ onShow(() => {
 <style scoped>
 .page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background: #f6f7f8;
   padding: 20rpx 30rpx 180rpx;
+  box-sizing: border-box;
 }
 
-.year-bar {
+.top-bar {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #fff;
-  padding: 24rpx;
-  border-radius: 12rpx;
+  justify-content: flex-start;
   margin-bottom: 20rpx;
-  gap: 40rpx;
 }
 
-.year-btn {
-  padding: 16rpx 24rpx;
+.month-pill {
+  min-width: 230rpx;
+  height: 72rpx;
+  padding: 0 28rpx;
+  border-radius: 36rpx;
+  background: #fff;
+  box-shadow: 0 8rpx 28rpx rgba(18, 28, 45, 0.06);
+  color: #17202c;
+  font-size: 30rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #667eea;
-  border-radius: 12rpx;
+  gap: 12rpx;
+}
+
+.pill-arrow {
+  color: #78818f;
+  transform: translateY(-4rpx);
+}
+
+.type-tabs {
+  display: flex;
+  padding: 8rpx;
+  border-radius: 18rpx;
+  background: #fff;
+  box-shadow: 0 8rpx 28rpx rgba(18, 28, 45, 0.06);
+  margin-bottom: 22rpx;
+}
+
+.type-tab {
+  flex: 1;
+  height: 76rpx;
+  border-radius: 14rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #566171;
+  font-size: 30rpx;
+}
+
+.type-tab.active {
+  background: #0aa394;
   color: #fff;
+  font-weight: 600;
+}
+
+.summary-card,
+.section-card,
+.state-card,
+.empty-tip {
+  background: #fff;
+  border-radius: 18rpx;
+  box-shadow: 0 10rpx 30rpx rgba(18, 28, 45, 0.06);
+}
+
+.summary-card {
+  display: flex;
+  align-items: stretch;
+  padding: 34rpx 32rpx;
+  margin-bottom: 22rpx;
+}
+
+.summary-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.summary-label,
+.side-label {
+  display: block;
+  color: #737c89;
   font-size: 28rpx;
-  white-space: nowrap;
 }
 
-.year-title {
-  font-size: 32rpx;
-  font-weight: bold;
-  color: #333;
+.summary-amount {
+  display: block;
+  margin-top: 14rpx;
+  color: #111827;
+  font-size: 58rpx;
+  line-height: 1.08;
+  font-weight: 700;
 }
 
-.cards {
+.summary-count {
+  display: block;
+  margin-top: 16rpx;
+  color: #7d8793;
+  font-size: 26rpx;
+}
+
+.summary-side {
+  width: 220rpx;
+  padding-left: 28rpx;
+  margin-left: 28rpx;
+  border-left: 1rpx solid #edf0f2;
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
-  margin-bottom: 30rpx;
+  justify-content: center;
+  gap: 12rpx;
 }
 
-.card {
-  padding: 28rpx;
-  border-radius: 12rpx;
-  color: #fff;
+.side-amount {
+  color: #17202c;
+  font-size: 30rpx;
+  font-weight: 700;
 }
 
-.income-card {
-  background: linear-gradient(135deg, #00b26a 0%, #00d4aa 100%);
+.section-card {
+  padding: 28rpx 26rpx;
+  margin-bottom: 22rpx;
 }
 
-.expense-card {
-  background: linear-gradient(135deg, #ff5252 0%, #ff8a80 100%);
-}
-
-.balance-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.card-label {
-  font-size: 24rpx;
-  opacity: 0.8;
-  display: block;
-  margin-bottom: 8rpx;
-}
-
-.card-amount {
-  font-size: 48rpx;
-  font-weight: bold;
-}
-
-.card-amount.positive {
-  color: #fff;
-}
-
-.card-amount.negative {
-  color: #ffcccc;
-}
-
-.month-section {
-  margin-top: 20rpx;
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22rpx;
 }
 
 .section-title {
-  font-size: 28rpx;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 16rpx;
+  color: #111827;
+  font-size: 30rpx;
+  font-weight: 700;
 }
 
-.month-row {
-  background-color: #fff;
-  padding: 24rpx;
-  border-radius: 12rpx;
-  margin-bottom: 12rpx;
+.loading-line,
+.empty-block {
+  padding: 50rpx 0;
+  text-align: center;
+  color: #8b95a1;
+  font-size: 26rpx;
 }
 
-.month-name {
-  font-size: 28rpx;
-  font-weight: 500;
-  color: #333;
-  display: block;
-  margin-bottom: 12rpx;
+.trend-scroll {
+  width: 100%;
 }
 
-.month-data {
+.trend-chart {
+  width: 820rpx;
+  height: 260rpx;
   display: flex;
-  justify-content: space-between;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 20rpx;
 }
 
-.data-item {
+.trend-item {
+  width: 116rpx;
+  flex: 0 0 116rpx;
+  height: 250rpx;
   display: flex;
-  gap: 8rpx;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.trend-value {
+  height: 34rpx;
+  color: #6f7783;
+  font-size: 22rpx;
+  white-space: nowrap;
+}
+
+.trend-value.active {
+  color: #0a9b8c;
+  font-weight: 700;
+}
+
+.bar-track {
+  height: 160rpx;
+  display: flex;
+  align-items: flex-end;
+}
+
+.bar {
+  width: 46rpx;
+  min-height: 8rpx;
+  border-radius: 12rpx 12rpx 4rpx 4rpx;
+  background: #d7efec;
+}
+
+.bar.active {
+  background: #0aa394;
+}
+
+.trend-month {
+  margin-top: 12rpx;
+  color: #737c89;
+  font-size: 24rpx;
+}
+
+.trend-month.active {
+  color: #111827;
+  font-weight: 700;
+}
+
+.category-row,
+.bill-row {
+  display: flex;
   align-items: center;
 }
 
-.data-label {
+.category-row {
+  padding: 18rpx 0;
+}
+
+.category-icon-wrap,
+.bill-icon-wrap {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: #e4f5f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.category-icon,
+.bill-icon {
+  font-size: 34rpx;
+}
+
+.category-main {
+  flex: 1;
+  min-width: 0;
+  margin-left: 20rpx;
+}
+
+.category-line,
+.progress-line {
+  display: flex;
+  align-items: center;
+}
+
+.category-line {
+  justify-content: space-between;
+}
+
+.category-name {
+  color: #17202c;
+  font-size: 28rpx;
+  font-weight: 600;
+  max-width: 270rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-money {
+  color: #17202c;
+  font-size: 27rpx;
+  font-weight: 600;
+}
+
+.progress-line {
+  margin-top: 12rpx;
+  gap: 18rpx;
+}
+
+.progress-track {
+  flex: 1;
+  height: 12rpx;
+  border-radius: 8rpx;
+  background: #eef1f3;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 8rpx;
+  background: #0aa394;
+}
+
+.category-percent {
+  width: 86rpx;
+  color: #8a929d;
   font-size: 24rpx;
-  color: #999;
+  text-align: right;
 }
 
-.data-value {
+.bill-row {
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #eef1f3;
+}
+
+.bill-row:last-child {
+  border-bottom: none;
+}
+
+.bill-info {
+  flex: 1;
+  min-width: 0;
+  margin-left: 20rpx;
+}
+
+.bill-title {
+  display: block;
+  color: #17202c;
+  font-size: 30rpx;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bill-meta {
+  display: block;
+  margin-top: 8rpx;
+  color: #87909b;
+  font-size: 24rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bill-amount {
+  margin-left: 16rpx;
+  color: #17202c;
+  font-size: 30rpx;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.bill-amount.income {
+  color: #0aa368;
+}
+
+.all-link {
+  height: 76rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14rpx;
+  color: #0a9b8c;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.link-arrow {
+  font-size: 42rpx;
+  line-height: 1;
+}
+
+.state-card,
+.empty-tip {
+  padding: 44rpx 30rpx;
+  text-align: center;
+}
+
+.state-title,
+.empty-title {
+  display: block;
+  color: #17202c;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.state-desc,
+.empty-desc {
+  display: block;
+  margin-top: 12rpx;
+  color: #7b8490;
+  font-size: 25rpx;
+}
+
+.state-button,
+.empty-button {
+  width: 220rpx;
+  height: 70rpx;
+  line-height: 70rpx;
+  margin-top: 28rpx;
+  border-radius: 35rpx;
+  background: #0aa394;
+  color: #fff;
   font-size: 26rpx;
-  font-weight: 500;
 }
 
-.data-value.income {
-  color: #00b26a;
-}
-
-.data-value.expense {
-  color: #ff5252;
+.empty-tip {
+  margin-bottom: 22rpx;
 }
 </style>

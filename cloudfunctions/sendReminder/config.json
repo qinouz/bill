@@ -1,9 +1,0 @@
-{
-  "triggers": [
-    {
-      "name": "reminderTrigger",
-      "type": "timer",
-      "config": "0 * * * * * *"
-    }
-  ]
-}

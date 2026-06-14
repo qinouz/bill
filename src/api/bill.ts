@@ -26,6 +26,39 @@ export interface BillStatistic {
   monthly: Record<string, { incomeCents: number; expenseCents: number }>
 }
 
+export interface MonthlyStatistics {
+  year: number
+  month: number
+  type: 'income' | 'expense'
+  summary: {
+    currentTypeAmountCents: number
+    currentTypeCount: number
+    expenseAmountCents: number
+    expenseCount: number
+    incomeAmountCents: number
+    incomeCount: number
+  }
+  trend: Array<{
+    year: number
+    month: number
+    amountCents: number
+    count: number
+  }>
+  categories: Array<{
+    categoryId: string
+    categoryName: string
+    categoryIcon: string
+    categoryColor?: string
+    amountCents: number
+    count: number
+    percentage: number
+  }>
+  recentBills: Array<Bill & {
+    title?: string
+    occurredAt?: string
+  }>
+}
+
 export interface BillListSummary {
   incomeCents: number
   expenseCents: number
@@ -40,7 +73,13 @@ export interface BillListResult {
   summary?: BillListSummary
 }
 
-export function getBillList(data: { pageSize: number; pageNo: number; month?: string }) {
+export function getBillList(data: {
+  pageSize: number
+  pageNo: number
+  month?: string
+  type?: 'income' | 'expense'
+  categoryId?: string
+}) {
   return request<BillListResult>({
     url: '/bills',
     method: 'GET',
@@ -95,6 +134,18 @@ export function getBillDetail(data: { billId: string }) {
 export function getBillStatistic(data: { year: number }) {
   return request<BillStatistic>({
     url: '/bills/statistic',
+    method: 'GET',
+    data,
+  })
+}
+
+export function getMonthlyStatistics(data: {
+  year: number
+  month: number
+  type: 'income' | 'expense'
+}) {
+  return request<MonthlyStatistics>({
+    url: '/statistics/monthly',
     method: 'GET',
     data,
   })
