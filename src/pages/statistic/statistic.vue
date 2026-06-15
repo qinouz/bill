@@ -44,30 +44,40 @@
         <view class="section-header">
           <text class="section-title">最近六个月</text>
         </view>
-        <view v-if="loading" class="loading-line">加载中...</view>
-        <scroll-view v-else class="trend-scroll" scroll-x enable-flex show-scrollbar="false">
-          <view class="trend-chart">
-            <view
-              v-for="item in trendItems"
-              :key="`${item.year}-${item.month}`"
-              class="trend-item"
-            >
-              <text class="trend-value" :class="{ active: isSelectedMonth(item.year, item.month) }">
-                {{ item.amountCents > 0 ? shortAmount(item.amountCents) : '' }}
-              </text>
-              <view class="bar-track">
-                <view
-                  class="bar"
-                  :class="{ active: isSelectedMonth(item.year, item.month) }"
-                  :style="{ height: `${item.height}rpx` }"
-                />
+        <view class="trend-wrap">
+          <scroll-view
+            class="trend-scroll"
+            scroll-x
+            enable-flex
+            show-scrollbar="false"
+            :scroll-into-view="trendScrollIntoView"
+          >
+            <view class="trend-chart">
+              <view
+                v-for="item in trendItems"
+                :key="`${item.year}-${item.month}`"
+                :id="trendItemId(item.year, item.month)"
+                class="trend-item"
+                @tap="selectTrendMonth(item.year, item.month)"
+              >
+                <text class="trend-value" :class="{ active: isSelectedMonth(item.year, item.month) }">
+                  {{ item.amountCents > 0 ? shortAmount(item.amountCents) : '' }}
+                </text>
+                <view class="bar-track">
+                  <view
+                    class="bar"
+                    :class="{ active: isSelectedMonth(item.year, item.month) }"
+                    :style="{ height: `${item.height}rpx` }"
+                  />
+                </view>
+                <text class="trend-month" :class="{ active: isSelectedMonth(item.year, item.month) }">
+                  {{ item.month }}月
+                </text>
               </view>
-              <text class="trend-month" :class="{ active: isSelectedMonth(item.year, item.month) }">
-                {{ item.month }}月
-              </text>
             </view>
-          </view>
-        </scroll-view>
+          </scroll-view>
+          <view v-if="loading" class="loading-mask">加载中...</view>
+        </view>
       </view>
 
       <view class="section-card">
@@ -91,7 +101,10 @@
             <view class="category-main">
               <view class="category-line">
                 <text class="category-name">{{ category.categoryName }}</text>
-                <text class="category-money">{{ moneyText(category.amountCents) }}</text>
+                <view class="category-action">
+                  <text class="category-money">{{ moneyText(category.amountCents) }}</text>
+                  <text class="category-arrow">›</text>
+                </view>
               </view>
               <view class="progress-line">
                 <view class="progress-track">
@@ -142,7 +155,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getMonthlyStatistics, type MonthlyStatistics } from '@/api/bill'
 import { useUserStore } from '@/store/user'
@@ -157,8 +170,11 @@ const selectedYear = ref(now.getFullYear())
 const selectedMonth = ref(now.getMonth() + 1)
 const currentType = ref<BillType>('expense')
 const statistics = ref<MonthlyStatistics | null>(null)
+const trend = ref<MonthlyStatistics['trend']>([])
 const loading = ref(false)
 const error = ref('')
+const trendScrollIntoView = ref('')
+let hasReleasedInitialTrendScroll = false
 let requestId = 0
 
 const typeOptions = [
@@ -191,9 +207,8 @@ const otherAmountText = computed(() => {
 })
 
 const trendItems = computed(() => {
-  const trend = statistics.value?.trend || []
-  const maxAmountCents = Math.max(...trend.map((item) => Number(item.amountCents) || 0), 0)
-  return trend.map((item) => {
+  const maxAmountCents = Math.max(...trend.value.map((item) => Number(item.amountCents) || 0), 0)
+  return trend.value.map((item) => {
     const amountCents = Number(item.amountCents) || 0
     return {
       ...item,
@@ -236,6 +251,19 @@ function isSelectedMonth(year: number, month: number) {
   return selectedYear.value === year && selectedMonth.value === month
 }
 
+function trendItemId(year: number, month: number) {
+  return `trend-${year}-${month}`
+}
+
+function selectTrendMonth(year: number, month: number) {
+  if (isSelectedMonth(year, month) || loading.value) return
+
+  selectedYear.value = year
+  selectedMonth.value = month
+  // 点击柱状图只切换下方月度数据；柱状图本身不重排、不重新设置 scroll-left。
+  loadStatistics({ updateTrend: false })
+}
+
 function onMonthChange(e: any) {
   const value = e.detail.value || ''
   const [year, month] = value.split('-').map(Number)
@@ -259,7 +287,23 @@ function switchType(type: BillType) {
   loadStatistics()
 }
 
-async function loadStatistics() {
+function releaseInitialTrendScroll() {
+  if (hasReleasedInitialTrendScroll) return
+  hasReleasedInitialTrendScroll = true
+
+  nextTick(() => {
+    const lastItem = trend.value[trend.value.length - 1]
+    if (!lastItem) return
+
+    trendScrollIntoView.value = trendItemId(lastItem.year, lastItem.month)
+    setTimeout(() => {
+      trendScrollIntoView.value = ''
+    }, 300)
+  })
+}
+
+async function loadStatistics(options: { updateTrend?: boolean } = {}) {
+  const updateTrend = options.updateTrend !== false
   const currentRequest = ++requestId
   loading.value = true
   error.value = ''
@@ -272,6 +316,10 @@ async function loadStatistics() {
     })
     if (currentRequest !== requestId) return
     statistics.value = data
+    if (updateTrend) {
+      trend.value = data.trend || []
+      releaseInitialTrendScroll()
+    }
   } catch (err: any) {
     if (currentRequest !== requestId) return
     error.value = err?.message || '月账单加载失败'
@@ -500,6 +548,11 @@ onShow(() => {
   font-size: 26rpx;
 }
 
+.trend-wrap {
+  position: relative;
+  min-height: 260rpx;
+}
+
 .trend-scroll {
   width: 100%;
 }
@@ -563,6 +616,17 @@ onShow(() => {
   font-weight: 700;
 }
 
+.loading-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.78);
+  color: #667085;
+  font-size: 26rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .category-row,
 .bill-row {
   display: flex;
@@ -620,6 +684,20 @@ onShow(() => {
   color: #17202c;
   font-size: 27rpx;
   font-weight: 600;
+}
+
+.category-action {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  flex-shrink: 0;
+  margin-left: 16rpx;
+}
+
+.category-arrow {
+  color: #b0b8c2;
+  font-size: 34rpx;
+  line-height: 1;
 }
 
 .progress-line {

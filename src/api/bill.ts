@@ -60,17 +60,40 @@ export interface MonthlyStatistics {
 }
 
 export interface BillListSummary {
-  incomeCents: number
-  expenseCents: number
-  balanceCents: number
+  incomeCents?: number
+  expenseCents?: number
+  balanceCents?: number
+  incomeAmountCents?: number
+  expenseAmountCents?: number
+  balanceAmountCents?: number
+  incomeCount?: number
+  expenseCount?: number
+  currentTypeAmountCents?: number
+  currentTypeCount?: number
+}
+
+export interface BillMonthGroup {
+  month: string
+  year: number
+  monthNumber: number
+  summary: BillListSummary
+  bills: Bill[]
 }
 
 export interface BillListResult {
-  bills: Bill[]
+  bills?: Bill[]
+  months?: BillMonthGroup[]
   total: number
   pageNo: number
   pageSize: number
+  hasMore?: boolean
   summary?: BillListSummary
+  range?: {
+    startMonth: string
+    endMonth: string
+    maxMonths: number
+    direction: 'older' | 'newer'
+  }
 }
 
 export function getBillList(data: {
@@ -79,6 +102,8 @@ export function getBillList(data: {
   month?: string
   type?: 'income' | 'expense'
   categoryId?: string
+  groupByMonth?: boolean
+  monthDirection?: 'older' | 'newer'
 }) {
   return request<BillListResult>({
     url: '/bills',
