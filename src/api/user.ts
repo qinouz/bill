@@ -1,4 +1,4 @@
-import { request } from '@/utils/request'
+import { loginWithWechat, request } from '@/utils/request'
 
 export interface UserProfile {
   userId: string
@@ -13,26 +13,7 @@ export interface LoginResult {
 }
 
 export function login(): Promise<LoginResult> {
-  return new Promise((resolve, reject) => {
-    uni.login({
-      provider: 'weixin',
-      success: async ({ code }) => {
-        try {
-          const data = await request<LoginResult>({
-            url: '/auth/login',
-            method: 'POST',
-            data: { code },
-          })
-
-          uni.setStorageSync('token', data.token)
-          resolve(data)
-        } catch (err) {
-          reject(err)
-        }
-      },
-      fail: reject,
-    })
-  })
+  return loginWithWechat()
 }
 
 export function getUserProfile() {

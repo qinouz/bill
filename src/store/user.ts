@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { login as loginApi, getUserProfile, getUserStats, type UserProfile } from '@/api/user'
+import { getUserProfile, getUserStats, type UserProfile } from '@/api/user'
 import { initCategories } from '@/api/category'
+import { clearAuthSession, restoreSessionToken } from '@/utils/request'
 
 export const useUserStore = defineStore('user', () => {
   const userInfo = ref<UserProfile | null>(null)
@@ -9,16 +10,11 @@ export const useUserStore = defineStore('user', () => {
   const stats = ref({ consecutiveDays: 0, recordDays: 0, billCount: 0 })
 
   async function autoLogin() {
-    // 先从缓存读取，立即可用
     const cached = uni.getStorageSync('userInfo')
-    const token = uni.getStorageSync('token')
-    if (cached && token) {
-      userInfo.value = cached
-    }
 
     try {
-      // 调用登录（内部会调用 uni.login 获取 code）
-      await loginApi()
+      // 先续期缓存 token；失效或超过刷新期限时再走微信登录。
+      await restoreSessionToken()
 
       const user = await getUserProfile()
       userInfo.value = user
@@ -29,10 +25,8 @@ export const useUserStore = defineStore('user', () => {
         initCategories().catch(() => {})
       }
     } catch (error) {
-      console.error('登录失败:', error)
-      if (!cached) {
-        userInfo.value = null
-      }
+      console.error('恢复登录状态失败:', error)
+      userInfo.value = cached || null
     }
   }
 
@@ -46,8 +40,7 @@ export const useUserStore = defineStore('user', () => {
 
   function clearUserInfo() {
     userInfo.value = null
-    uni.removeStorageSync('userInfo')
-    uni.removeStorageSync('token')
+    clearAuthSession()
   }
 
   return {
